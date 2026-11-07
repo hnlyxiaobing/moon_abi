@@ -1,6 +1,7 @@
 # moon_abi · 公开 API（API.md）
 
-> 与 `pkg.generated.mbti` 一致。4 个函数全部为 `declare`（**无实现**，预期 4 × `0068` 告警）。
+> **API 冻结前对账（R2 准备轮，2026-11-07）**：本文已与 `pkg.generated.mbti` 快照及源码公开签名逐项对账一致；**冻结后签名变更即破坏性变更**。
+> 4 个函数均为**真实实现**（`pub fn`，非 `declare` 占位，0 条 `0068`）。
 > `preferred_target = "wasm"`（未改动）。错误传播统一 `raise MoonAbiError`。
 > **纯 MoonBit 库**：无 `#external` 句柄、无 `extern "C"`、无 `#borrow/#owned`、无回调、无 I/O。
 
@@ -10,7 +11,7 @@
 |---|---|---|
 | `Abi` | `pub(all) enum` | `ArmeabiV7a` / `Arm64V8a` / `X86` / `X86_64` |
 | `TargetTriple` | `pub(all) enum` | 4 种 NDK 目标三元组前缀（不含 API level 后缀） |
-| `ApiLevel` | `pub(all) struct` | `{ level : Int }` 包装，防止裸 Int 混用 |
+| `ApiLevel` | `pub(all) struct` | `{ level : Int32 }` 包装，防止裸 Int 混用（快照字段类型为 `Int32`） |
 | `NdkProfile` | `pub(all) struct` | `ndk_root` / `ndk_version` / `api_level` / `extra_link_libs` / `extra_cc_flags` / `windows_path_style` |
 | `LinkNativeConfig` | `pub(all) struct` | `cc` / `cc_flags` / `cc_link_flags` / `stub_cc : String?` / `supported_targets` / `triple` / `abi` / `api_level` |
 | `ValidationReport` | `pub(all) struct` | `ok : Bool` / `warnings : Array[String]` / `errors : Array[String]` |
@@ -19,12 +20,12 @@
 
 ## 函数签名
 
-| 签名 | 参数与所有权 | 返回 / 错误 | 资源与线程约束 | TODO |
+| 签名 | 参数与所有权 | 返回 / 错误 | 资源与线程约束 | 实现要点 / 备注 |
 |---|---|---|---|---|
-| `generate(profile : NdkProfile, abi : Abi) -> LinkNativeConfig raise MoonAbiError` | `profile` 只读注入，不探测本机 | 纯值配置 / `UnsupportedAbi`、`UnsupportedApiLevel`、`MissingNdkRoot`、`VersionMismatch` | **纯函数、无 I/O、可并发**；不含句柄 | NDK r23+ clang 命名、`--target` 后缀、`-llog -landroid` 注入 |
-| `render(config : LinkNativeConfig) -> String raise MoonAbiError` | `config` 只读 | `options(link.native…)` 文本片段 / `InvalidTriple`、`MissingClang`、`PathContainsSpace` | 确定性输出，同输入两次逐字相等 | Windows 路径引号策略、`stub_cc` 分支 |
-| `validate(profile : NdkProfile, abi : Abi) -> ValidationReport raise MoonAbiError` | `profile` 只读 | 校验报告；`warnings` 不阻断、`errors` 阻断 | 纯函数、可并发 | CI 门禁映射、版本锁一致性检查 |
-| `clang_name(abi : Abi, api : ApiLevel) -> String raise MoonAbiError` | 纯值 | clang 可执行文件名（含 API level 后缀）/ `UnsupportedAbi`、`UnsupportedApiLevel` | 纯函数 | 以当前 NDK 文档为准，不得引用「r23 移除 GNU make」这一已证伪说法 |
+| `generate(profile : NdkProfile, abi : Abi) -> LinkNativeConfig raise MoonAbiError` | `profile` 只读注入，不探测本机 | 纯值配置 / `UnsupportedAbi`、`UnsupportedApiLevel`、`MissingNdkRoot`、`VersionMismatch` | **纯函数、无 I/O、可并发**；不含句柄 | **已实现**：NDK 统一工具链命名 `<triple><api>-clang`；注入 `--target=<triple><api>`、`-llog -landroid`（`extra_link_libs` 自动补 `-l`）；校验顺序 `MissingNdkRoot` → `UnsupportedApiLevel` → `VersionMismatch` |
+| `render(config : LinkNativeConfig) -> String raise MoonAbiError` | `config` 只读 | `options(link.native…)` 文本片段 / `InvalidTriple`、`MissingClang`、`PathContainsSpace` | 确定性输出，同输入两次逐字相等 | **已实现**：Windows 路径空格提前拒绝、不自动加引号；`stub_cc : None` 时省略 `stub-cc` 行 |
+| `validate(profile : NdkProfile, abi : Abi) -> ValidationReport raise MoonAbiError` | `profile` 只读 | 校验报告 / `UnsupportedAbi`（无法建模为报告的映射失败）；`warnings` 不阻断、`errors` 阻断 | 纯函数、可并发 | **已实现**：缺 NDK 路径、API level 越界、版本不匹配、含空格 token 进 `errors`；空条目 / 重复链接库 / 路径风格不一致进 `warnings` |
+| `clang_name(abi : Abi, api : ApiLevel) -> String raise MoonAbiError` | 纯值 | clang 可执行文件名（含 API level 后缀）/ `UnsupportedAbi`、`UnsupportedApiLevel` | 纯函数 | **已实现**：以当前 NDK 文档为准，不得引用「r23 移除 GNU make」这一已证伪说法 |
 
 ## 错误构造速查
 
@@ -44,4 +45,6 @@
 
 ## 状态
 
-`moon check`：✅ 0 error，4 × `0068`。`moon build`：可构建（无链接期阻塞，因无 FFI）。`moon test`：⚠️ 本轮无实际断言（测试逻辑属实现轮）。API 快照：`pkg.generated.mbti`。实现：❌ 后续轮（ADR-0005 W0，桌面可测）。
+**API 冻结前对账（R2 准备轮）**：API.md ↔ `pkg.generated.mbti` ↔ 源码公开签名三方一致；**冻结后签名变更即破坏性变更**。
+四道门禁实跑全绿（2026-11-07）：`moon check --deny-warn`（0 error / 0 warn）· `moon build` · `moon test`（**30 tests** 全过）· `moon fmt --check`。
+API 快照：`pkg.generated.mbti`（只读，未改动）。实现：✅ 已完成（纯值库，无 I/O、无 FFI、无链接期阻塞）。

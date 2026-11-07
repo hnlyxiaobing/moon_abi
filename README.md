@@ -2,7 +2,7 @@
 
 **Android 交叉编译 `link.native` 配置生成器 —— 按 ABI 与 API level 产出确定性配置值与文本片段。**
 
-> 状态：**实现轮完成**。8 个值类型、`ConfigRenderer` trait、`MoonAbiError` 与 4 个 API（`generate` / `render` / `validate` / `clang_name`）全部为真实实现，`moon check --deny-warn` / `moon build` / `moon test` 全绿（30 tests，`pkg.generated.mbti` 与 Round-1 快照逐字一致）。**纯值、无 I/O、无外部命令执行**。
+> 状态：**实现完成，API 冻结前对账（R2 准备轮）**。8 个值类型、`ConfigRenderer` trait、`MoonAbiError` 与 4 个 API（`generate` / `render` / `validate` / `clang_name`）全部为真实实现，四道门禁 `moon check --deny-warn` / `moon build` / `moon test` / `moon fmt --check` 全绿（30 tests，`pkg.generated.mbti` 与源码逐字对账一致；冻结后签名变更即破坏性变更）。**纯值、无 I/O、无外部命令执行**。
 > `preferred_target = "wasm"`（骨架原值，未改动）；全后端、桌面可测。
 > **与原 README 定位差异**：骨架描述的是 CLI `moon-abi gen --abi armv7 --api 21`（约 300 行脚本），本轮契约改为**纯 MoonBit 库 API** `generate` / `render` / `validate` / `clang_name`。理由与影响见下文「定位修正」。
 
@@ -22,7 +22,7 @@ CLI 包装**没有被删除**，只是后移：由组合根把 `render` 的文�
 
 **选「纯 MoonBit 自研」而非复用**（`capability-matrix.md` 序 17）：`moonrockz/zig-cross@0.3.2`（Apache-2.0）是「用 zig 编译 native」的另一条路径，引入会带来 zig 工具链依赖，属无依据大型依赖，本轮**仅作参照、不引入**（ADR-0010）。
 
-**报告事实修正**：`[事实-证伪]` 不得引用「NDK r23 移除 GNU make / standalone toolchain」；r23 移除的是 GNU binutils / GDB 支持。实现轮的 clang 命名规则须以当前 NDK 文档为准（`TODO(实现轮)`）。
+**报告事实修正**：`[事实-证伪]` 不得引用「NDK r23 移除 GNU make / standalone toolchain」；r23 移除的是 GNU binutils / GDB 支持。clang 命名规则已按当前 NDK 文档实现为统一工具链 wrapper（`<triple><api>-clang`）。
 
 ## 能力范围 / 非目标
 
@@ -43,8 +43,8 @@ CLI 包装**没有被删除**，只是后移：由组合根把 `render` 的文�
 
 | 风险 | 说明 |
 |---|---|
-| NDK 版本差异 | clang 前缀命名随 NDK 版本变化；`VersionMismatch` / `InvalidTriple` 已预留；实现轮须锁 NDK 版本（ADR-0010 版本锁） |
-| Windows 路径 | NDK / JDK 路径含空格会导致 cc 命令断裂；`windows_path_style` + `PathContainsSpace` 用于提前拒绝，引号策略属 `TODO(实现轮)` |
+| NDK 版本差异 | clang 前缀命名随 NDK 版本变化；`VersionMismatch` / `InvalidTriple` 已生效；已按最低 NDK 主版本常量（`MIN_NDK_MAJOR`，面向 r22+）校验，ADR-0010 版本锁由 `moon_android::ToolchainVersions` 持有 |
+| Windows 路径 | NDK / JDK 路径含空格会导致 cc 命令断裂；`windows_path_style` + `PathContainsSpace` 提前拒绝、不自动加引号（**已实现**） |
 | 分发许可 | NDK 二进制不可再分发（Android SDK License 3.4）；**本库只分发配置文本**，不含任何 SDK 构件 |
 | API level | `UnsupportedApiLevel(got, min)` 显式化；不猜测默认 minSdk |
 | 平台 | 库自身全后端（`wasm`）；产出的配置只面向 Linux / Android 交叉编译 |
@@ -53,17 +53,17 @@ CLI 包装**没有被删除**，只是后移：由组合根把 `render` 的文�
 
 - **快照测试（桌面 CI 可跑）**：4 种 ABI × 多组 API level 的 `render` 输出与 golden 逐字比对；同一输入连跑两次结果必须一致（确定性）。
 - **负例**：缺 `ndk_root` → `MissingNdkRoot`；未知 ABI → `UnsupportedAbi`；路径含空格 → `PathContainsSpace`；clang 缺失 → `MissingClang`；`validate` 的 `warnings` 不阻断、`errors` 阻断。
-- **验收标准（实现轮）**：生成片段可直接粘贴进 `moon.pkg` 并被 `moon check` 接受；快照全绿；R4 `--deny-warn` 转绿。
-- **本轮阻塞**：无链接期阻塞；`moon test` 目前无实际断言（`_test.mbt` 仍是骨架，见 `docs/moon-check-report.md` §4）。
+- **验收标准**：生成片段可直接粘贴进 `moon.pkg` 并被 `moon check` 接受；快照全绿；`moon check --deny-warn` 转绿（✅ R2 准备轮实跑，0 error / 0 warn）。
+- **门禁实跑（R2 准备轮，2026-11-07）**：`moon clean` → `moon check --deny-warn` → `moon build` → `moon test`（**30 tests** 全过）→ `moon fmt --check`，全部 exit 0；无链接期阻塞（无 FFI）。
 
 ## 当前状态 / 本轮产物
 
 | 项 | 状态 |
 |---|---|
 | `moon_abi.mbt`：值类型 ×8、`ConfigRenderer` trait、`MoonAbiError`（7 构造）、API ×4 | ✅ |
-| `pkg.generated.mbti` API 快照（与 Round-1 逐字一致） | ✅ |
-| cc / flags 生成、clang 命名、路径引号（空格拒绝）策略、golden 快照 | ✅ 实现轮完成 |
-| `moon check --deny-warn` / `moon build` / `moon test` | ✅ 全绿（30 tests） |
+| `pkg.generated.mbti` API 快照（与源码公开签名对账一致） | ✅ |
+| cc / flags 生成、clang 命名、路径空格拒绝策略、golden 快照 | ✅ 已实现 |
+| 四道门禁：`moon check --deny-warn` / `moon build` / `moon test` / `moon fmt --check` | ✅ 全绿（30 tests） |
 
 ## 文档索引
 

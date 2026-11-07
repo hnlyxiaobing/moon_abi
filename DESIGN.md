@@ -1,6 +1,6 @@
 # moon_abi · 设计契约（DESIGN.md）
 
-> Round-1 / 2026-11-06 ｜ 状态：架构与声明可评审，无生成逻辑、无 I/O
+> Round-1 起草 / 2026-11-06 ｜ **API 冻结前对账（R2 准备轮）/ 2026-11-07** ｜ 状态：**已实现**，纯值、无 I/O、四道门禁全绿（冻结后签名变更即破坏性变更）
 
 ## 1. 分层位置与职责
 
@@ -26,7 +26,7 @@ NdkProfile + Abi（调用方注入）
 |---|---|
 | `Abi` | `ArmeabiV7a` / `Arm64V8a` / `X86` / `X86_64` |
 | `TargetTriple` | `Armv7aLinuxAndroideabi` / `Aarch64LinuxAndroid` / `I686LinuxAndroid` / `X86_64LinuxAndroid`（不含 API level 后缀） |
-| `ApiLevel { level : Int }` | 包装类型，防止裸 `Int` 在 minSdk / targetSdk / clang 后缀之间混用 |
+| `ApiLevel { level : Int32 }` | 包装类型，防止裸 `Int32` 在 minSdk / targetSdk / clang 后缀之间混用 |
 | `NdkProfile` | `ndk_root` / `ndk_version` / `api_level` / `extra_link_libs` / `extra_cc_flags` / `windows_path_style` |
 | `LinkNativeConfig` | 生成结果：`cc` / `cc_flags` / `cc_link_flags` / `stub_cc?` / `supported_targets` / `triple` / `abi` / `api_level` |
 | `ValidationReport { ok, warnings, errors }` | CI 门禁用；`warnings` 不阻断、`errors` 阻断 |
@@ -37,7 +37,7 @@ NdkProfile + Abi（调用方注入）
 
 ## 4. 错误模型
 
-`MoonAbiError`：`UnsupportedAbi(String)`、`UnsupportedApiLevel(Int, Int)`、`MissingNdkRoot`、`MissingClang(String)`、`PathContainsSpace(String)`、`InvalidTriple(String)`、`VersionMismatch(String, String)`。
+`MoonAbiError`：`UnsupportedAbi(String)`、`UnsupportedApiLevel(Int32, Int32)`、`MissingNdkRoot`、`MissingClang(String)`、`PathContainsSpace(String)`、`InvalidTriple(String)`、`VersionMismatch(String, String)`（与快照逐字一致，共 7 个构造）。
 
 失败型 API 统一 `-> T raise MoonAbiError`；`validate` 则把「需人工确认但不阻断」的问题放进 `ValidationReport.warnings`，避免把警告误报成异常。错误只在本模块内，组合根负责映射为 CI 失败信息。
 
@@ -47,7 +47,7 @@ NdkProfile + Abi（调用方注入）
 
 ## 6. 线程 / 并发边界
 
-纯函数、无可变全局状态、无环境读取、无静态查表缓存；可并发调用。实现轮若引入 NDK 版本表，必须为**不可变常量**，不得 `lazy` 初始化可变全局。
+纯函数、无可变全局状态、无环境读取、无静态查表缓存；可并发调用。NDK 版本表与 ABI → 三元组映射表均为**不可变常量**（`MIN_NDK_MAJOR` / `MIN_API_LEVEL` / `triple_of_name`），不使用 `lazy` 初始化可变全局。
 
 ## 7. 平台约束与外部依赖
 
@@ -66,7 +66,7 @@ NdkProfile + Abi（调用方注入）
 | `NdkProfile + Abi` | `ValidationReport` | `MoonAbiError`；报告内 `warnings` 不阻断 |
 | `Abi + ApiLevel` | `String`（clang 可执行文件名） | `UnsupportedAbi` / `UnsupportedApiLevel` |
 
-`declare` 只用于 4 个函数签名；具体 `enum` / `struct` / `trait` / `suberror` 用真实类型定义（ADR-0001）。**无 `#external`、无 `extern "C"`、无 `#borrow/#owned`、无回调**。
+4 个函数均为 `pub fn` **真实实现**（无 `declare` 占位、无 `0068` 告警）；具体 `enum` / `struct` / `trait` / `suberror` 用真实类型定义（ADR-0001）。**无 `#external`、无 `extern "C"`、无 `#borrow/#owned`、无回调**。
 
 ## 9. 可替换性与实现细节不泄漏
 
@@ -80,19 +80,19 @@ NdkProfile + Abi（调用方注入）
 | 确定性 | 同一输入连跑两次逐字相等；禁止时间戳 / 绝对路径随机化 |
 | 负例 | `MissingNdkRoot` / `UnsupportedAbi` / `UnsupportedApiLevel` / `PathContainsSpace` / `MissingClang` / `VersionMismatch` |
 | CI | `validate` 的 `errors` 非空即失败；`warnings` 仅记录；版本锁一致（`ToolchainVersions` 由 `moon_android` 持有） |
-| 门禁 | `moon fmt --check` / `moon check` / `moon test --enable-coverage` / `moon info` 快照 |
+| 门禁 | 四道门禁：`moon check --deny-warn` / `moon build` / `moon test` / `moon fmt --check`（R2 准备轮实跑全绿，30 tests） |
 
-## 11. 验收标准（实现轮）
+## 11. 验收标准（实现轮；R2 准备轮复核）
 
-1. 生成片段可直接粘贴进 `moon.pkg` 并被 `moon check` 接受；2. 快照测试全绿且输出确定性可证；3. 所有非法配置返回 `MoonAbiError`；4. R4 `--deny-warn` 转绿。
+1. 生成片段为可直接粘贴进 `moon.pkg` 的 `options(link.native…)` 文本（golden 快照覆盖；实际粘贴验证属组合根集成）；2. 快照测试全绿且输出确定性可证（✅，30 tests）；3. 所有非法配置返回 `MoonAbiError`（✅ 负例覆盖）；4. `moon check --deny-warn` 转绿（✅ R2 准备轮实跑，0 error / 0 warn）。
 
 ## 12. 未解决问题 / 待验证假设
 
-E3（P0）Android native 产物链路能否产出可加载 `.so` · Q1（未解决）`mvp/android/build.ps1` 与本工作区资产缺失 · NDK r23+ 前缀 clang 命名规则需按当前文档锁定 · `-llog -landroid` 注入策略、Windows 路径引号策略属 `TODO(实现轮)` · zig-cross 是否值得在 R4 复议未定。
+E3（P0）Android native 产物链路能否产出可加载 `.so` · Q1（未解决）`mvp/android/build.ps1` 与本工作区资产缺失 · NDK clang 命名已按当前文档锁定为统一工具链 wrapper（`<triple><api>-clang`），NDK 大版本升级时需复核 · zig-cross 是否值得在 R4 复议未定。
 
-## 13. 当前状态与 TODO
+## 13. 当前状态
 
-`moon_abi.mbt` 已写入全部值类型、`ConfigRenderer` trait、`MoonAbiError` 与 4 个 `declare` 函数，公开 API 有 `///` 文档注释与 `TODO(实现轮)`。**未实现任何配置生成 / 渲染 / 校验逻辑，未写文件、未执行命令**。
+`moon_abi.mbt` 的全部值类型、`ConfigRenderer` trait、`MoonAbiError` 与 4 个 API（`generate` / `render` / `validate` / `clang_name`）均为**真实实现**，公开 API 带 `///` 文档注释；`pkg.generated.mbti` 快照与源码一致。**仍不写文件、不执行命令、无 I/O**（非目标不变）。四道门禁全绿（30 tests，R2 准备轮实跑）。
 
 ## References
 
