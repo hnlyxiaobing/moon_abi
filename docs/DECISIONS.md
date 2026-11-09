@@ -27,7 +27,7 @@
 - 保持可替换性：将来若改走 zig 路线（或换任何交叉编译器），只改 `NdkProfile` 与渲染实现，不改 `generate` / `render` / `validate` / `clang_name` 的签名。
 
 **后果**：
-- 本库零依赖（无 `moon add`、未改 `moon.pkg`）、零 FFI、无外部句柄；桌面与 wasm 后端均可直接测试。
+- 本库零依赖（无 `moon add`、未改 `../moon.pkg`）、零 FFI、无外部句柄；桌面与 wasm 后端均可直接测试。
 - zig-cross 是否值得引入，留待后续轮次按五条门槛重新评估；当前结论是**只参照、不引入**。
 
 ### 决策 1 的 R4 复议（2026-11-09）：结论仍为「不引入」
@@ -71,7 +71,7 @@
 
 **决策**：
 - 本库契约为 **4 个纯函数**：`generate(profile, abi)` / `render(config)` / `validate(profile, abi)` / `clang_name(abi, api)`。
-- CLI 包装**没有被删除，只是后移**：由组合根把 `render` 的文本写入 `moon.pkg` 或打印到 stdout。
+- CLI 包装**没有被删除，只是后移**：由组合根把 `render` 的文本写入 `../moon.pkg` 或打印到 stdout。
 - `NdkProfile` 由调用方注入，库不探测本机环境。
 
 **理由**：
@@ -80,8 +80,8 @@
 - `PathContainsSpace` 只做校验而非自动加引号：引号语义随 shell 变化，提前拒绝更确定。
 
 **后果**：
-- 骨架 README 描述的 CLI 形态由组合根承接（写 `moon.pkg` / stdout），本库不含任何 CLI 代码。
-- 验收标准「生成片段可直接粘贴进 `moon.pkg` 并被 `moon check` 接受」的**实际粘贴验证属组合根集成**，本库以 golden 快照覆盖文本形态。
+- 骨架 README 描述的 CLI 形态由组合根承接（写 `../moon.pkg` / stdout），本库不含任何 CLI 代码。
+- 验收标准「生成片段可直接粘贴进 `../moon.pkg` 并被 `moon check` 接受」的**实际粘贴验证属组合根集成**，本库以 golden 快照覆盖文本形态。
 
 ### 决策 2 的 R4 更新（2026-11-09）：CLI 已在本模块内落地
 
@@ -91,7 +91,7 @@
 - **边界仍然成立**：核心配置生成（`generate` / `render` / `validate` / `clang_name`）保持**纯函数、无 I/O、确定性**；全部文件系统/环境变量访问被收敛到 `sync_config_file`、`probe_ndk` 与 `cmd/main` 三个明确入口。
 - **为何改变**：R4 任务明确要求 CLI 落地（写文件与只读输出、幂等、退出码契约、NDK 探测）。若继续后移，这些契约无法在模块内测试与复现。新增的 I/O 只依赖 `moonbitlang/core/async/fs` 与 `moonbitlang/core/env`（工具链随附 core，不是外部 mooncakes 依赖），因此**零跨模块 import 的红线不变**。
 - **可测试性补偿**：I/O 不是直接写死在业务逻辑里——`write_config_with` 用注入的读/写闭包覆盖权限拒绝、磁盘满、读失败；`probe_ndk_with` 用注入的目录/文件闭包覆盖伪目录；真实文件系统测试只在 `@fs.tmpdir()` 临时目录内进行并递归清理。
-- **仍属非目标**：调用 NDK/clang、执行打包/签名、下载 SDK、链接任何 C 库。CLI 只生成文本/写 `moon.pkg`，不验证设备可加载（E3 仍待实测，见决策 7）。
+- **仍属非目标**：调用 NDK/clang、执行打包/签名、下载 SDK、链接任何 C 库。CLI 只生成文本/写 `../moon.pkg`，不验证设备可加载（E3 仍待实测，见决策 7）。
 
 ## 决策 3：与 moon_android 仅以文本契约协作、名义类型隔离
 
@@ -103,7 +103,7 @@
 - `moon_abi` **不读打包产物**（否则会与 `moon_android` 成环）。
 - 本库零 import、零 FFI、零外部句柄；`#external` 句柄永不跨模块传递。
 
-**理由**：名义类型 + 零 import 使两模块可完全并行开发、独立评审；文本契约天然消解潜在循环依赖；结构漂移风险由 `pkg.generated.mbti` API 快照 + 契约测试守住。
+**理由**：名义类型 + 零 import 使两模块可完全并行开发、独立评审；文本契约天然消解潜在循环依赖；结构漂移风险由 `../pkg.generated.mbti` API 快照 + 契约测试守住。
 
 **后果**：组合根需要少量显式适配代码（值类型转换）；`moon_android::ToolchainVersions` 等跨模块语义以**文本契约**约定（见决策 6），不构成编译期依赖。
 
@@ -115,7 +115,7 @@
 
 **理由**：解除 NDK 对其他模块并行开发的阻塞；本库仍是所有 Android FFI 项目上板时的**公共配置前置**，但不阻塞桌面验证。
 
-**后果**：各 FFI 模块与本库可完全并行推进；上板集成阶段必须消费本库产出的配置片段（`generate` → `render` → 写入 `moon.pkg`）。
+**后果**：各 FFI 模块与本库可完全并行推进；上板集成阶段必须消费本库产出的配置片段（`generate` → `render` → 写入 `../moon.pkg`）。
 
 ## 决策 5：具体类型用真实定义、函数用真实实现
 
@@ -126,9 +126,9 @@
 - 本库 4 个函数均为 `pub fn` **真实实现**（无 `declare` 占位、无 `0068` 告警），公开 API 配 `///` 文档注释（参数所有权、错误、线程约束、非目标）。
 - 无 `#external`、无 `extern "C"`、无 `#borrow` / `#owned`、无回调。
 
-**理由**：语言层面 `declare` 不能声明具体类型定义，只能用真实类型；真实类型定义本身不违反「不实现业务逻辑」的约束，且让 `pkg.generated.mbti` API 快照可直接评审。
+**理由**：语言层面 `declare` 不能声明具体类型定义，只能用真实类型；真实类型定义本身不违反「不实现业务逻辑」的约束，且让 `../pkg.generated.mbti` API 快照可直接评审。
 
-**后果**：`moon check --deny-warn` 可开（0 error / 0 warn）；`pkg.generated.mbti` 与源码公开签名逐字对账一致；**冻结后签名变更即破坏性变更**。
+**后果**：`moon check --deny-warn` 可开（0 error / 0 warn）；`../pkg.generated.mbti` 与源码公开签名逐字对账一致；**冻结后签名变更即破坏性变更**。
 
 ## 决策 6：NDK 事实基线
 

@@ -13,7 +13,7 @@ NdkProfile + Abi（调用方注入）            NdkProbeInputs + 环境变量
    └─► moon_abi::generate ──► LinkNativeConfig       └─► probe_ndk / probe_ndk_with
                                   ├─► render ──► options(link.native…) 文本片段        └─► NdkProbeResult（结构化）
                                   ├─► managed_block ──► 带起止标记的受管块
-                                  └─► sync_config_file / write_config_with ──► moon.pkg（幂等追加/替换）
+                                  └─► sync_config_file / write_config_with ──► ../moon.pkg（幂等追加/替换）
                                                    │
                                                    ▼
                                     moon_android::plan_build ──► BuildPlan
@@ -51,7 +51,7 @@ NdkProfile + Abi（调用方注入）            NdkProbeInputs + 环境变量
 
 **核心全部纯值**：`generate` / `render` / `clang_name` / `validate` / `merge_link_config` / `probe_ndk_with` 无句柄、无 fd、无文件、无进程、无缓存，不修改输入，无需释放函数，无 close 语义。这是本库能在 wasm 目标与桌面 CI 上直接单测的根本原因。
 
-R4 的 I/O 被限制在三个明确入口：`sync_config_file`（读/写 `moon.pkg`）、`probe_ndk`（只读 stat/read 探测 NDK）、`cmd/main`（进程参数/环境变量/退出码）。它们不持有跨调用句柄；临时目录测试在 `@fs.tmpdir()` 内完成并递归清理。
+R4 的 I/O 被限制在三个明确入口：`sync_config_file`（读/写 `../moon.pkg`）、`probe_ndk`（只读 stat/read 探测 NDK）、`cmd/main`（进程参数/环境变量/退出码）。它们不持有跨调用句柄；临时目录测试在 `@fs.tmpdir()` 内完成并递归清理。
 
 ## 6. 线程 / 并发边界
 
@@ -61,7 +61,7 @@ R4 的 I/O 被限制在三个明确入口：`sync_config_file`（读/写 `moon.p
 
 - `preferred_target = "wasm"`（未改动），全后端；输出面向 NDK r22+。
 - 外部依赖：**无**。`moonrockz/zig-cross`（0.3.2 / 0.4.1）**R4 复议结论仍为不引入**：其直接依赖 `moonbitlang/async` + `moonbitlang/x`、需要 zig 工具链、且走的是另一条编译路径，不能替代本库的 NDK clang 配置生成；详见 `DECISIONS.md` 决策 1 的 R4 复议节（2026-11-09 复核证据）。
-- R4 I/O 依赖：`moonbitlang/core/async/fs` 与 `moonbitlang/core/env` 随工具链 core 下发，**不是 mooncakes 外部依赖**；`moon.pkg` 用 `allow-experimental-packages` 显式承认 `async/fs` 的实验状态。
+- R4 I/O 依赖：`moonbitlang/core/async/fs` 与 `moonbitlang/core/env` 随工具链 core 下发，**不是 mooncakes 外部依赖**；`../moon.pkg` 用 `allow-experimental-packages` 显式承认 `async/fs` 的实验状态。
 - `[事实]` `moon build --target` 无 android；native 后端不能导出可链接 `.so/.dll`；`#export_name` 仅限 `foreign_library` 包。
 - `[事实-证伪]` NDK r23 移除的是 GNU binutils（除 GAS）与 GDB 支持，**不是** GNU make / standalone toolchain（standalone toolchain 脚本仍在，仅提示不再必要）；不得据此错误前提设计回退路径。
 - `[待验证假设]` Android 上「MoonBit → C 源码/对象 → NDK clang + CMake」能否产出可加载 `.so`，尚未复现（开发环境无最小实验资产）；详见 `DECISIONS.md` 决策 7。
@@ -96,13 +96,13 @@ R4 的 I/O 被限制在三个明确入口：`sync_config_file`（读/写 `moon.p
 | 负例 | `MissingNdkRoot` / `UnsupportedAbi` / `UnsupportedApiLevel` / `PathContainsSpace` / `MissingClang` / `VersionMismatch` |
 | R4 CLI 纯逻辑 | 参数解析合法/非法（含 `--flag=value`、重复项、缺值、越界 API）；退出码 2/1 映射；受管块追加/替换/幂等；畸形标记 `MalformedConfig` |
 | R4 错误注入 | `write_config_with` 注入权限拒绝 / 磁盘满 / 读失败 → `IoFailure`；`probe_ndk_with` 注入伪目录覆盖命中/回退/取最高/不完整/全未找到 |
-| R4 真实 fs | `@fs.tmpdir()` 临时目录内写 `moon.pkg`（首次追加、二次 unchanged、手工改动后 replaced）；伪 NDK/SDK 目录真实探测；测试结束递归清理 |
+| R4 真实 fs | `@fs.tmpdir()` 临时目录内写 `../moon.pkg`（首次追加、二次 unchanged、手工改动后 replaced）；伪 NDK/SDK 目录真实探测；测试结束递归清理 |
 | CI | `validate` 的 `errors` 非空即失败；`warnings` 仅记录；版本锁一致（`ToolchainVersions` 由 `moon_android` 持有） |
-| 门禁 | 四道门禁 + 第 5 道快照门禁：`moon check --deny-warn` / `moon build` / `moon test`（**68 tests**）/ `moon fmt --check` / `moon info && git diff --exit-code -- pkg.generated.mbti cmd/main/pkg.generated.mbti` |
+| 门禁 | 四道门禁 + 第 5 道快照门禁：`moon check --deny-warn` / `moon build` / `moon test`（**68 tests**）/ `moon fmt --check` / `moon info && git diff --exit-code -- ../pkg.generated.mbti ../cmd/main/pkg.generated.mbti` |
 
 ## 11. 验收标准（实现阶段；冻结前复核）
 
-1. 生成片段为可直接粘贴进 `moon.pkg` 的 `options(link.native…)` 文本（golden 快照覆盖；R4 CLI 的写文件模式进一步把「追加/替换/幂等」固化为可执行测试）；2. 快照测试全绿且输出确定性可证（✅，68 tests）；3. 所有非法配置/参数返回 `MoonAbiError`（✅ 负例与错误注入覆盖，畸形输入不 panic）；4. `moon check --deny-warn` 转绿（✅，0 error / 0 warn）；5. CLI 退出码契约 0/2/1 实测（✅ 本机 `moon run cmd/main` 实跑）。
+1. 生成片段为可直接粘贴进 `../moon.pkg` 的 `options(link.native…)` 文本（golden 快照覆盖；R4 CLI 的写文件模式进一步把「追加/替换/幂等」固化为可执行测试）；2. 快照测试全绿且输出确定性可证（✅，68 tests）；3. 所有非法配置/参数返回 `MoonAbiError`（✅ 负例与错误注入覆盖，畸形输入不 panic）；4. `moon check --deny-warn` 转绿（✅，0 error / 0 warn）；5. CLI 退出码契约 0/2/1 实测（✅ 本机 `moon run cmd/main` 实跑）。
 
 ## 12. 未解决问题 / 待验证假设
 
@@ -110,8 +110,8 @@ Android native 产物链路（「MoonBit → C 源码/对象 → NDK clang + CMa
 
 ## 13. 当前状态
 
-`moon_abi.mbt` 的原有值类型、`ConfigRenderer` trait、`MoonAbiError`（11 构造）与 4 个核心 API（`generate` / `render` / `validate` / `clang_name`）均为**真实实现**；R4 追加 CLI 纯逻辑（`parse_gen_args` / `exit_code_for_error` / `managed_block` / `merge_link_config` / `write_config_with`）、真实写文件（`sync_config_file`）、NDK 探测（`probe_ndk` / `probe_ndk_with`）与结构化输出（`ndk_probe_text` / `ndk_probe_json`），以及 `cmd/main` 可执行入口。**核心配置生成仍不写文件、不执行外部命令**；I/O 仅在上述明确入口。`pkg.generated.mbti` 与 `cmd/main/pkg.generated.mbti` 快照与源码一致（R4 为纯加法 diff）。五道门禁全绿（**68 tests**，2026-11-09 本机实跑）。
+`../moon_abi.mbt` 的原有值类型、`ConfigRenderer` trait、`MoonAbiError`（11 构造）与 4 个核心 API（`generate` / `render` / `validate` / `clang_name`）均为**真实实现**；R4 追加 CLI 纯逻辑（`parse_gen_args` / `exit_code_for_error` / `managed_block` / `merge_link_config` / `write_config_with`）、真实写文件（`sync_config_file`）、NDK 探测（`probe_ndk` / `probe_ndk_with`）与结构化输出（`ndk_probe_text` / `ndk_probe_json`），以及 `cmd/main` 可执行入口。**核心配置生成仍不写文件、不执行外部命令**；I/O 仅在上述明确入口。`../pkg.generated.mbti` 与 `../cmd/main/pkg.generated.mbti` 快照与源码一致（R4 为纯加法 diff）。五道门禁全绿（**68 tests**，2026-11-09 本机实跑）。
 
 ## References
 
-`README.md` · `API.md` · `DECISIONS.md`（设计决策记录：自研选型 / 定位修正 / 文本契约与名义类型隔离 / 软依赖定位 / 声明与实现策略 / NDK 事实基线 / 风险与待验证）
+`../README.md` · `API.md` · `DECISIONS.md`（设计决策记录：自研选型 / 定位修正 / 文本契约与名义类型隔离 / 软依赖定位 / 声明与实现策略 / NDK 事实基线 / 风险与待验证）

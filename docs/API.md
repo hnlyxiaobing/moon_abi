@@ -1,7 +1,7 @@
 # moon_abi · 公开 API（API.md）
 
-> **API 冻结前对账（2026-11-07）**：原有 4 个函数与值类型已与 `pkg.generated.mbti` 快照逐项对账一致；**冻结后签名变更即破坏性变更**。
-> **R4 更新（2026-11-09）**：CLI 纯逻辑、幂等写文件、NDK 探测落地；全部为**加法性新增**（`pkg.generated.mbti` 纯加法 diff，已随源码提交）。
+> **API 冻结前对账（2026-11-07）**：原有 4 个函数与值类型已与 `../pkg.generated.mbti` 快照逐项对账一致；**冻结后签名变更即破坏性变更**。
+> **R4 更新（2026-11-09）**：CLI 纯逻辑、幂等写文件、NDK 探测落地；全部为**加法性新增**（`../pkg.generated.mbti` 纯加法 diff，已随源码提交）。
 > 核心配置生成仍为**纯 MoonBit**：无 `#external` 句柄、无 `extern "C"`、无 `#borrow/#owned`、无回调。R4 的 I/O 只出现在 `sync_config_file` / `probe_ndk` / `cmd/main` 三个明确入口。
 
 ## 类型
@@ -17,7 +17,7 @@
 | `MoonAbiError` | `pub suberror` | 11 个错误构造（原 7 个 + R4 的 4 个） |
 | `ConfigRenderer` | `pub trait` | `fn render(Self) -> String raise MoonAbiError`（确定性、可复现） |
 | `PathStyle` | `pub(all) enum` | `Auto` / `Windows` / `Unix`（CLI 路径风格） |
-| `GenOutput` | `pub(all) enum` | `Stdout`（只读打印）/ `File(String)`（写/追加 `moon.pkg`） |
+| `GenOutput` | `pub(all) enum` | `Stdout`（只读打印）/ `File(String)`（写/追加 `../moon.pkg`） |
 | `GenCommand` | `pub(all) struct` | CLI `gen` 解析结果：`abi` / `api_level` / `ndk_root?` / `ndk_version?` / `output` / `path_style` |
 | `MergeAction` | `pub(all) enum` | `Appended` / `Replaced` / `Unchanged` |
 | `MergeResult` | `pub(all) struct` | `content : String` / `action : MergeAction` |
@@ -81,6 +81,6 @@
 
 ## 状态
 
-**API 冻结前对账（2026-11-07）**：原 API ↔ `pkg.generated.mbti` ↔ 源码公开签名三方一致；冻结后原有签名变更即破坏性变更。**R4 追加均为加法性**，快照已随源码提交。
-五道门禁实跑全绿（2026-11-09）：`moon check --deny-warn`（0 error / 0 warn）· `moon build` · `moon test`（**68 tests** 全过）· `moon fmt --check` · 第 5 道快照门禁 `moon info && git diff --exit-code -- pkg.generated.mbti cmd/main/pkg.generated.mbti`。
-API 快照：`pkg.generated.mbti`（R4 纯加法）。
+**API 冻结前对账（2026-11-07）**：原 API ↔ `../pkg.generated.mbti` ↔ 源码公开签名三方一致；冻结后原有签名变更即破坏性变更。**R4 追加均为加法性**，快照已随源码提交。
+五道门禁实跑全绿（2026-11-09）：`moon check --deny-warn`（0 error / 0 warn）· `moon build` · `moon test`（**68 tests** 全过）· `moon fmt --check` · 第 5 道快照门禁 `moon info && git diff --exit-code -- ../pkg.generated.mbti ../cmd/main/pkg.generated.mbti`。
+API 快照：`../pkg.generated.mbti`（R4 纯加法）。
