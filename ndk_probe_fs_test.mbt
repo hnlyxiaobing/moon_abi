@@ -77,15 +77,25 @@ async test "probe_ndk: ANDROID_HOME/ndk 版本目录取最高（伪 SDK）" {
 }
 
 ///|
-async test "probe_ndk: 无 NDK 环境 → found=false 且结构化告警" {
-  let result = @moon_abi.probe_ndk({
-    explicit_root: None,
-    ndk_home: None,
-    android_home: None,
-    android_sdk_root: None,
-    home_dir: None,
-    local_app_data: None,
-  })
+test "probe_ndk: 无 NDK 环境 → found=false 且结构化告警" {
+  // 说明：真实 FS 包装在「全空输入」下仍会扫描硬编码常见路径（`/opt/android-sdk`、
+  // `/usr/local/lib/android/sdk` 等），而 GitHub ubuntu runner 预装 Android NDK，
+  // 这些路径会命中导致 `found=true`——「真实机器上不存在任何 NDK」无法确定性构造。
+  // 「全未找到」的判定路径位于纯函数核心 `evaluate_roots`，此处以全空文件系统
+  // 闭包经 `probe_ndk_with` 确定性覆盖同一分支（等价于真实 FS 全部未命中时的行为）。
+  let result = @moon_abi.probe_ndk_with(
+    {
+      explicit_root: None,
+      ndk_home: None,
+      android_home: None,
+      android_sdk_root: None,
+      home_dir: None,
+      local_app_data: None,
+    },
+    _path => false,
+    _path => ([] : Array[String]),
+    _path => (None : String?),
+  )
   assert_false(result.found)
   assert_true(result.warnings.length() > 0)
   assert_true(@moon_abi.ndk_probe_json(result).contains("\"found\":false"))
