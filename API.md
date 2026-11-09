@@ -1,6 +1,6 @@
 # moon_abi · 公开 API（API.md）
 
-> **API 冻结前对账（R2 准备轮，2026-11-07）**：本文已与 `pkg.generated.mbti` 快照及源码公开签名逐项对账一致；**冻结后签名变更即破坏性变更**。
+> **API 冻结前对账（2026-11-07）**：本文已与 `pkg.generated.mbti` 快照及源码公开签名逐项对账一致；**冻结后签名变更即破坏性变更**。
 > 4 个函数均为**真实实现**（`pub fn`，非 `declare` 占位，0 条 `0068`）。
 > `preferred_target = "wasm"`（未改动）。错误传播统一 `raise MoonAbiError`。
 > **纯 MoonBit 库**：无 `#external` 句柄、无 `extern "C"`、无 `#borrow/#owned`、无回调、无 I/O。
@@ -33,11 +33,11 @@
 
 ## 与骨架 README 的接口差异
 
-骨架写的是 CLI `moon-abi gen --abi armv7 --api 21`。本轮**不实现 CLI**：命令行解析、stdout 输出、写 `moon.pkg` 属组合根 / 未来 App 工程，理由见 `README.md`「定位修正」与 ADR-0002。库 API 保持纯值，便于快照测试与零 import 独立 `moon check`。
+骨架写的是 CLI `moon-abi gen --abi armv7 --api 21`。本轮**不实现 CLI**：命令行解析、stdout 输出、写 `moon.pkg` 属组合根 / 未来 App 工程，理由见 `README.md`「定位修正」与 `DECISIONS.md` 决策 2。库 API 保持纯值，便于快照测试与零 import 独立 `moon check`。
 
 ## Wire / 跨模块提示
 
-`moon_abi` 输出的是**文本片段**，不向 `moon_android` 传递 `LinkNativeConfig` 类型（两模块名义类型隔离、零 import，ADR-0002 / K5）。`Abi` 在 `moon_abi` 与 `moon_android` 中**各自定义、结构同构**，由组合根转换。
+`moon_abi` 输出的是**文本片段**，不向 `moon_android` 传递 `LinkNativeConfig` 类型（两模块名义类型隔离、零 import，消解潜在循环依赖，详见 `DECISIONS.md` 决策 3）。`Abi` 在 `moon_abi` 与 `moon_android` 中**各自定义、结构同构**，由组合根转换。
 
 ## 非目标
 
@@ -45,6 +45,6 @@
 
 ## 状态
 
-**API 冻结前对账（R2 准备轮）**：API.md ↔ `pkg.generated.mbti` ↔ 源码公开签名三方一致；**冻结后签名变更即破坏性变更**。
+**API 冻结前对账（2026-11-07）**：API.md ↔ `pkg.generated.mbti` ↔ 源码公开签名三方一致；**冻结后签名变更即破坏性变更**。
 四道门禁实跑全绿（2026-11-07）：`moon check --deny-warn`（0 error / 0 warn）· `moon build` · `moon test`（**30 tests** 全过）· `moon fmt --check`。
 API 快照：`pkg.generated.mbti`（只读，未改动）。实现：✅ 已完成（纯值库，无 I/O、无 FFI、无链接期阻塞）。

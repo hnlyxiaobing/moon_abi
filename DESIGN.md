@@ -1,10 +1,10 @@
 # moon_abi · 设计契约（DESIGN.md）
 
-> Round-1 起草 / 2026-11-06 ｜ **API 冻结前对账（R2 准备轮）/ 2026-11-07** ｜ 状态：**已实现**，纯值、无 I/O、四道门禁全绿（冻结后签名变更即破坏性变更）
+> 起草 / 2026-11-06 ｜ **API 冻结前对账 / 2026-11-07** ｜ 状态：**已实现**，纯值、无 I/O、四道门禁全绿（冻结后签名变更即破坏性变更）
 
 ## 1. 分层位置与职责
 
-L4 工程交付层的**纯 MoonBit 配置生成叶子库**。职责：把「ABI + API level + NDK Profile」映射为 `link.native` 配置值，并渲染成确定性文本。它是所有 Android FFI 项目的**公共配置前置**，但按 ADR-0005 已从「FFI 硬前置」降级为「上板软依赖」——桌面用预编译 `.so` 即可验证 `tflite_ffi` / `camera2`，不需要 NDK。
+工程交付层的**纯 MoonBit 配置生成叶子库**。职责：把「ABI + API level + NDK Profile」映射为 `link.native` 配置值，并渲染成确定性文本。它是所有 Android FFI 项目的**公共配置前置**，但已从「FFI 硬前置」降级为「上板软依赖」——桌面用预编译 `.so` 即可验证 `tflite_ffi` / `camera2`，不需要 NDK（决策依据见 `DECISIONS.md` 决策 4）。
 
 ## 2. 模块边界 / 依赖方向 / 数据流
 
@@ -18,7 +18,7 @@ NdkProfile + Abi（调用方注入）
                                     moon_android::plan_build ──► BuildPlan
 ```
 
-`moon_abi` → `moon_android` 是**数据契约（配置片段文本），不是 import**（K5 消解）。`moon_abi` **不读打包产物**，否则会与 `moon_android` 形成环。本库零 import、零 FFI、零外部句柄。
+`moon_abi` → `moon_android` 是**数据契约（配置片段文本），不是 import**（消解与 `moon_android` 的潜在循环依赖，见 `DECISIONS.md` 决策 3）。`moon_abi` **不读打包产物**，否则会与 `moon_android` 形成环。本库零 import、零 FFI、零外部句柄。
 
 ## 3. 核心数据结构
 
@@ -52,10 +52,10 @@ NdkProfile + Abi（调用方注入）
 ## 7. 平台约束与外部依赖
 
 - `preferred_target = "wasm"`（未改动），全后端；输出面向 NDK r22+。
-- 外部依赖：**无**（本轮）。`moonrockz/zig-cross@0.3.2` 只作设计参照，不引入（ADR-0010）。
+- 外部依赖：**无**（本轮）。`moonrockz/zig-cross@0.3.2` 只作设计参照，不引入（详见 `DECISIONS.md` 决策 1）。
 - `[事实]` `moon build --target` 无 android；native 后端不能导出可链接 `.so/.dll`；`#export_name` 仅限 `foreign_library` 包。
-- `[事实-证伪]` NDK r23 移除的是 GNU binutils / GDB 支持，**不是** GNU make / standalone toolchain；实现轮不得据此设计回退路径。
-- `[待验证假设]` E3：Android 上「MoonBit → C 源码/对象 → NDK clang + CMake」能否产出可加载产物，本工作区无 `mvp/` 资产，未复现。
+- `[事实-证伪]` NDK r23 移除的是 GNU binutils（除 GAS）与 GDB 支持，**不是** GNU make / standalone toolchain（standalone toolchain 脚本仍在，仅提示不再必要）；不得据此错误前提设计回退路径。
+- `[待验证假设]` Android 上「MoonBit → C 源码/对象 → NDK clang + CMake」能否产出可加载 `.so`，尚未复现（开发环境无最小实验资产）；详见 `DECISIONS.md` 决策 7。
 
 ## 8. 输入输出类型与错误传播（纯 MoonBit 库）
 
@@ -66,11 +66,11 @@ NdkProfile + Abi（调用方注入）
 | `NdkProfile + Abi` | `ValidationReport` | `MoonAbiError`；报告内 `warnings` 不阻断 |
 | `Abi + ApiLevel` | `String`（clang 可执行文件名） | `UnsupportedAbi` / `UnsupportedApiLevel` |
 
-4 个函数均为 `pub fn` **真实实现**（无 `declare` 占位、无 `0068` 告警）；具体 `enum` / `struct` / `trait` / `suberror` 用真实类型定义（ADR-0001）。**无 `#external`、无 `extern "C"`、无 `#borrow/#owned`、无回调**。
+4 个函数均为 `pub fn` **真实实现**（无 `declare` 占位、无 `0068` 告警）；具体 `enum` / `struct` / `trait` / `suberror` 用真实类型定义（`declare` 不支持具体类型定义的编译器限制与替代策略见 `DECISIONS.md` 决策 5）。**无 `#external`、无 `extern "C"`、无 `#borrow/#owned`、无回调**。
 
 ## 9. 可替换性与实现细节不泄漏
 
-上层只看到 `LinkNativeConfig` / `ValidationReport` / 文本片段；看不到 NDK 目录布局、clang 命名规则推导、Windows 引号策略、SDK 版本探测。换 NDK 版本、换交叉编译器（如 zig-cross）只改 `NdkProfile` 与渲染实现，不改 `generate` / `render` 签名。`moon_android::BuildPlan` 只消费文本，不引用本库类型（K5）。
+上层只看到 `LinkNativeConfig` / `ValidationReport` / 文本片段；看不到 NDK 目录布局、clang 命名规则推导、Windows 引号策略、SDK 版本探测。换 NDK 版本、换交叉编译器（如 zig-cross）只改 `NdkProfile` 与渲染实现，不改 `generate` / `render` 签名。`moon_android::BuildPlan` 只消费文本，不引用本库类型（名义类型隔离，见 `DECISIONS.md` 决策 3）。
 
 ## 10. 测试策略
 
@@ -80,20 +80,20 @@ NdkProfile + Abi（调用方注入）
 | 确定性 | 同一输入连跑两次逐字相等；禁止时间戳 / 绝对路径随机化 |
 | 负例 | `MissingNdkRoot` / `UnsupportedAbi` / `UnsupportedApiLevel` / `PathContainsSpace` / `MissingClang` / `VersionMismatch` |
 | CI | `validate` 的 `errors` 非空即失败；`warnings` 仅记录；版本锁一致（`ToolchainVersions` 由 `moon_android` 持有） |
-| 门禁 | 四道门禁：`moon check --deny-warn` / `moon build` / `moon test` / `moon fmt --check`（R2 准备轮实跑全绿，30 tests） |
+| 门禁 | 四道门禁：`moon check --deny-warn` / `moon build` / `moon test` / `moon fmt --check`（冻结前实跑全绿，30 tests） |
 
-## 11. 验收标准（实现轮；R2 准备轮复核）
+## 11. 验收标准（实现阶段；冻结前复核）
 
-1. 生成片段为可直接粘贴进 `moon.pkg` 的 `options(link.native…)` 文本（golden 快照覆盖；实际粘贴验证属组合根集成）；2. 快照测试全绿且输出确定性可证（✅，30 tests）；3. 所有非法配置返回 `MoonAbiError`（✅ 负例覆盖）；4. `moon check --deny-warn` 转绿（✅ R2 准备轮实跑，0 error / 0 warn）。
+1. 生成片段为可直接粘贴进 `moon.pkg` 的 `options(link.native…)` 文本（golden 快照覆盖；实际粘贴验证属组合根集成）；2. 快照测试全绿且输出确定性可证（✅，30 tests）；3. 所有非法配置返回 `MoonAbiError`（✅ 负例覆盖）；4. `moon check --deny-warn` 转绿（✅ 冻结前实跑，0 error / 0 warn）。
 
 ## 12. 未解决问题 / 待验证假设
 
-E3（P0）Android native 产物链路能否产出可加载 `.so` · Q1（未解决）`mvp/android/build.ps1` 与本工作区资产缺失 · NDK clang 命名已按当前文档锁定为统一工具链 wrapper（`<triple><api>-clang`），NDK 大版本升级时需复核 · zig-cross 是否值得在 R4 复议未定。
+Android native 产物链路（「MoonBit → C 源码/对象 → NDK clang + CMake」）能否产出可加载 `.so` 尚未复现，属高优先级待验证项 · 开发期引用的一次性打包脚本与真实 APK 样本资产未随本仓库分发，集成验证需自备样本 · NDK clang 命名已按当前文档锁定为统一工具链 wrapper（`<triple><api>-clang`），NDK 大版本升级时需复核 · zig-cross 是否值得在后续轮复议未定。详见 `DECISIONS.md` 决策 7。
 
 ## 13. 当前状态
 
-`moon_abi.mbt` 的全部值类型、`ConfigRenderer` trait、`MoonAbiError` 与 4 个 API（`generate` / `render` / `validate` / `clang_name`）均为**真实实现**，公开 API 带 `///` 文档注释；`pkg.generated.mbti` 快照与源码一致。**仍不写文件、不执行命令、无 I/O**（非目标不变）。四道门禁全绿（30 tests，R2 准备轮实跑）。
+`moon_abi.mbt` 的全部值类型、`ConfigRenderer` trait、`MoonAbiError` 与 4 个 API（`generate` / `render` / `validate` / `clang_name`）均为**真实实现**，公开 API 带 `///` 文档注释；`pkg.generated.mbti` 快照与源码一致。**仍不写文件、不执行命令、无 I/O**（非目标不变）。四道门禁全绿（30 tests，冻结前实跑）。
 
 ## References
 
-`../docs/architecture.md` §2 / §5.4 / §6 L4 / §7 · `../docs/dependency-graph.md` K5 / O3 · `../docs/adr/ADR-0001`、`ADR-0002`、`ADR-0005`、`ADR-0010` · `../docs/capability-matrix.md` 序 17 · `../docs/open-questions.md` E3 / Q1
+`README.md` · `API.md` · `DECISIONS.md`（设计决策记录：自研选型 / 定位修正 / 文本契约与名义类型隔离 / 软依赖定位 / 声明与实现策略 / NDK 事实基线 / 风险与待验证）
