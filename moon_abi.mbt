@@ -72,6 +72,11 @@ pub suberror MoonAbiError {
   PathContainsSpace(String)
   InvalidTriple(String)
   VersionMismatch(String, String)
+  // R4：CLI 与文件改写错误（加法性新增，既有 7 个构造语义不变）
+  CliUsage(String)
+  IoFailure(String, String)
+  MalformedConfig(String)
+  NdkNotFound(String)
 }
 
 ///|

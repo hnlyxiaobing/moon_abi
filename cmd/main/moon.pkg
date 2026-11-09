@@ -1,5 +1,11 @@
-// import {
-//   "hnlyxiaobing/moon_abi" @lib,
-// }
+import {
+  "hnlyxiaobing/moon_abi",
+  "moonbitlang/core/async",
+  "moonbitlang/core/env",
+}
 
 pkgtype(kind: "executable")
+
+options(
+  "allow-experimental-packages": true,
+)

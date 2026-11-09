@@ -6,13 +6,41 @@ import {
 }
 
 // Values
+pub fn abi_from_name(String) -> Abi raise MoonAbiError
+
 pub fn clang_name(Abi, ApiLevel) -> String raise MoonAbiError
+
+pub fn error_message(MoonAbiError) -> String
+
+pub fn exit_code_for_error(MoonAbiError) -> Int32
 
 pub fn generate(NdkProfile, Abi) -> LinkNativeConfig raise MoonAbiError
 
+pub fn managed_block(LinkNativeConfig) -> String raise MoonAbiError
+
+pub fn merge_action_name(MergeAction) -> String
+
+pub fn merge_link_config(String, String) -> MergeResult raise MoonAbiError
+
+pub fn ndk_probe_json(NdkProbeResult) -> String
+
+pub fn ndk_probe_text(NdkProbeResult) -> String
+
+pub fn parse_gen_args(ArrayView[String]) -> GenCommand raise MoonAbiError
+
+pub async fn probe_ndk(NdkProbeInputs) -> NdkProbeResult
+
+pub fn probe_ndk_with(NdkProbeInputs, (String) -> Bool, (String) -> Array[String], (String) -> String?) -> NdkProbeResult
+
 pub fn render(LinkNativeConfig) -> String raise MoonAbiError
 
+pub async fn sync_config_file(String, String) -> MergeResult raise MoonAbiError
+
 pub fn validate(NdkProfile, Abi) -> ValidationReport raise MoonAbiError
+
+pub fn windows_path_style_of(String) -> Bool
+
+pub fn write_config_with(String, String, (String) -> ReadOutcome, (String, String) -> Result[Unit, String]) -> MergeResult raise MoonAbiError
 
 // Errors
 #derive(@debug.Debug)
@@ -24,6 +52,10 @@ pub suberror MoonAbiError {
   PathContainsSpace(String)
   InvalidTriple(String)
   VersionMismatch(String, String)
+  CliUsage(String)
+  IoFailure(String, String)
+  MalformedConfig(String)
+  NdkNotFound(String)
 }
 pub fn MoonAbiError::to_repr(Self) -> @debug.Repr
 
@@ -39,6 +71,20 @@ pub(all) struct ApiLevel {
   level : Int32
 }
 
+pub(all) struct GenCommand {
+  abi : Abi
+  api_level : ApiLevel
+  ndk_root : String?
+  ndk_version : String?
+  output : GenOutput
+  path_style : PathStyle
+}
+
+pub(all) enum GenOutput {
+  Stdout
+  File(String)
+}
+
 pub(all) struct LinkNativeConfig {
   cc : String
   cc_flags : Array[String]
@@ -50,6 +96,43 @@ pub(all) struct LinkNativeConfig {
   api_level : ApiLevel
 }
 
+pub(all) enum MergeAction {
+  Appended
+  Replaced
+  Unchanged
+}
+
+pub(all) struct MergeResult {
+  content : String
+  action : MergeAction
+}
+
+pub(all) struct NdkCandidate {
+  source : NdkSource
+  path : String
+  exists : Bool
+  usable : Bool
+  version : String?
+  note : String
+}
+
+pub(all) struct NdkProbeInputs {
+  explicit_root : String?
+  ndk_home : String?
+  android_home : String?
+  android_sdk_root : String?
+  home_dir : String?
+  local_app_data : String?
+}
+
+pub(all) struct NdkProbeResult {
+  found : Bool
+  selected : String?
+  version : String?
+  candidates : Array[NdkCandidate]
+  warnings : Array[String]
+}
+
 pub(all) struct NdkProfile {
   ndk_root : String
   ndk_version : String
@@ -57,6 +140,26 @@ pub(all) struct NdkProfile {
   extra_link_libs : Array[String]
   extra_cc_flags : Array[String]
   windows_path_style : Bool
+}
+
+pub(all) enum NdkSource {
+  Explicit
+  NdkHomeEnv
+  AndroidHomeNdk
+  AndroidSdkRootNdk
+  CommonPath
+}
+
+pub(all) enum PathStyle {
+  Auto
+  Windows
+  Unix
+}
+
+pub(all) enum ReadOutcome {
+  Found(String)
+  NotFound
+  Failed(String)
 }
 
 pub(all) enum TargetTriple {
