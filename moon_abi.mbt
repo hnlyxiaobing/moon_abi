@@ -1,9 +1,11 @@
 ///|
-/// Android 交叉编译 `link.native` 配置生成器的类型与实现。
+/// Android 交叉编译 `link.native` 配置生成器的核心类型与实现。
 ///
-/// 本库是纯 MoonBit 的「配置值 + 渲染」库：不执行外部命令、不修改构建系统、
-/// 不写入文件、不链接任何 C 库。它只产出可被粘贴进 `moon.pkg` 的配置片段。
-/// 所有函数均为纯函数、确定性、可并发；失败一律 `raise MoonAbiError`。
+/// 核心是「配置值 + 渲染」：不执行外部命令、不链接任何 C 库，只产出可被粘贴
+/// 进 `moon.pkg` 的配置片段（`generate` / `render` / `validate` / `clang_name`）。
+/// R4 追加的 CLI、文件读写与本机探测 I/O 集中在 `sync_config_file` /
+/// `probe_ndk` / `cmd/main`，不改变核心纯函数语义；探测失败降级为结构化告警。
+/// 失败一律 `raise MoonAbiError`（或返回结构化报告），不 panic。
 
 ///|
 /// 目标 ABI。
