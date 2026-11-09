@@ -30,6 +30,41 @@
 - 本库零依赖（无 `moon add`、未改 `moon.pkg`）、零 FFI、无外部句柄；桌面与 wasm 后端均可直接测试。
 - zig-cross 是否值得引入，留待后续轮次按五条门槛重新评估；当前结论是**只参照、不引入**。
 
+### 决策 1 的 R4 复议（2026-11-09）：结论仍为「不引入」
+
+> 触发原因：申报书把「`zig-cross` 引入与否 R4 复议」列为计划项。本节是**书面复议结论**，不改变决策 1 的原有结论，只补充 2026-11-09 的复核证据与判定。
+
+**复核对象与事实**（2026-11-09 查询 mooncakes registry 与 GitHub API，`[已复验-网络]`；外部数据只作事实引用）：
+
+| 项 | 0.3.2（申报书原参照版本） | 0.4.1（查询时 latest） |
+|---|---|---|
+| 版本状态 | `yanked=false`、`build_status=success` | 同左；`latest_version=0.4.1` |
+| 许可 | `Apache-2.0`（registry `metadata.license` 与 GitHub `license.spdx_id` 一致） | 同左 |
+| 发布时间 | 2026-10-31 | 2026-11-07 |
+| 直接依赖 | `moonbitlang/async@0.22.5`、`moonbitlang/x@0.5.5` | `moonbitlang/async@0.22.7`、`moonbitlang/x@0.5.5` |
+| 仓库 | `https://github.com/moonrockz/moonx-tools`（创建 2026-10-17，最后 push 2026-11-07，star=0，fork=0，open issues=2，`archived=false`，language=MoonBit） | 同左 |
+| 定位 | 描述 "Cross-compile MoonBit native binaries with zig"；keywords 含 `zig` / `cross-compile` / `command-line` | 同左 |
+
+**收益（若引入）**：
+- 可作为「zig 编译 native」路线的现成驱动与配置结构参照（本库只借鉴配置思路，这一点已发生且无需依赖）。
+- 若未来交付链正式改用 zig 作为交叉编译器，其驱动代码可能有复用价值。
+
+**成本 / 风险**：
+- **依赖面**：直接引入 2 个依赖（`moonbitlang/async`、`moonbitlang/x`，均为版本敏感的 0.x），与 ADR-0002「11 模块零跨模块 import、可独立 `moon check`」和 ADR-0010「零新增依赖」直接冲突；传递依赖未逐项审计，引入即新增版本耦合与升级跟随成本。
+- **工具链**：其价值前提是本机安装 zig 工具链；本环境**未安装、未实测** zig，且外部工具链的许可/分发/平台覆盖需另核（`[仍需实测]`），与本库「纯 MoonBit、不执行外部命令」的定位相反。
+- **能力不匹配**：本库的交付物是供 **NDK clang** 消费的 `options(link.native…)` 文本；`zig-cross` 是另一条编译路径，**不能**替代本库，也不解决 E3（MoonBit→C→NDK clang 产出可加载 `.so`）的复现验证。
+- **维护**：仓库创建于 2026-10-17，star=0 / fork=0、单人/新组织维护、0.x API 未稳定，且一周内从 0.3.2 迭代到 0.4.1；对「只生成确定性文本」的本库而言，收益不抵维护与版本跟随成本。
+- **许可**：`zig-cross` 自身 Apache-2.0 与本项目兼容；但其依赖的 zig 工具链及传递依赖的再分发义务未核（`[仅据文档]` / `[仍需实测]`）。**不引入即不产生新增许可义务**。
+
+**复议结论：不引入 `zig-cross`（任何版本），维持 0 依赖。** 仅保留为设计参照。
+
+**重评触发条件**（满足任一才重新评估，且仍须过 ADR-0010 五门槛）：
+1. 交付链正式决定用 zig 取代 NDK clang 作为 MoonBit→Android 的交叉编译器；
+2. 本库职责扩展到「执行编译驱动」（当前明确非目标）；
+3. `zig-cross` 提供本库无法以更小代价覆盖的能力，且其依赖面收敛到可接受范围。
+
+**可逆性**：即使未来引入，`generate` / `render` / `validate` / `clang_name` 的签名保持不变；只改 `NdkProfile` 与渲染实现（决策 1 的可替换性结论仍成立）。
+
 ## 决策 2：CLI 后移组合根，库保持纯值 API
 
 **背景**：原始构想是 CLI `moon-abi gen --abi armv7 --api 21`（约 300 行脚本），由脚本探测本机 NDK 并写文件。但本项目家族约定各模块**零跨模块 import、各自独立 `moon check`**，且 CLI 与进程 / 文件 I/O 属于组合根（未来 App 工程里的一段适配代码）而非叶子库职责。
@@ -47,6 +82,16 @@
 **后果**：
 - 骨架 README 描述的 CLI 形态由组合根承接（写 `moon.pkg` / stdout），本库不含任何 CLI 代码。
 - 验收标准「生成片段可直接粘贴进 `moon.pkg` 并被 `moon check` 接受」的**实际粘贴验证属组合根集成**，本库以 golden 快照覆盖文本形态。
+
+### 决策 2 的 R4 更新（2026-11-09）：CLI 已在本模块内落地
+
+> 本节只登记职责边界的变化与理由；决策 2 在 R1–R3 期间的结论（库保持纯值核心）**不被推翻**。
+
+- **R4 交付**：在模块内新增 `cmd/main` CLI（`moon-abi gen` / `moon-abi probe`）与 I/O 层（`sync_config_file` / `probe_ndk`）。CLI 不再是「未来组合根的一段代码」，而是本模块的可执行包。
+- **边界仍然成立**：核心配置生成（`generate` / `render` / `validate` / `clang_name`）保持**纯函数、无 I/O、确定性**；全部文件系统/环境变量访问被收敛到 `sync_config_file`、`probe_ndk` 与 `cmd/main` 三个明确入口。
+- **为何改变**：R4 任务明确要求 CLI 落地（写文件与只读输出、幂等、退出码契约、NDK 探测）。若继续后移，这些契约无法在模块内测试与复现。新增的 I/O 只依赖 `moonbitlang/core/async/fs` 与 `moonbitlang/core/env`（工具链随附 core，不是外部 mooncakes 依赖），因此**零跨模块 import 的红线不变**。
+- **可测试性补偿**：I/O 不是直接写死在业务逻辑里——`write_config_with` 用注入的读/写闭包覆盖权限拒绝、磁盘满、读失败；`probe_ndk_with` 用注入的目录/文件闭包覆盖伪目录；真实文件系统测试只在 `@fs.tmpdir()` 临时目录内进行并递归清理。
+- **仍属非目标**：调用 NDK/clang、执行打包/签名、下载 SDK、链接任何 C 库。CLI 只生成文本/写 `moon.pkg`，不验证设备可加载（E3 仍待实测，见决策 7）。
 
 ## 决策 3：与 moon_android 仅以文本契约协作、名义类型隔离
 
