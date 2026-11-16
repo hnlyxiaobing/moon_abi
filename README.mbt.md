@@ -1,9 +1,7 @@
 # hnlyxiaobing/moon_abi
 
-> 实现完成 · **API 冻结前对账（2026-11-07）**。本包提供配置值类型、`ConfigRenderer` trait 与 `generate` / `render` / `validate` / `clang_name` 4 个纯函数的**真实实现**，**无 I/O、无 CLI**。四道门禁 `moon check --deny-warn` / `moon build` / `moon test` / `moon fmt --check`：全绿（30 tests）。**冻结后签名变更即破坏性变更。**
+把 Android NDK/API 约束变成可校验、可渲染的交叉编译配置文本，而不是直接调用工具链。
 
-Android 交叉编译 `link.native` 配置生成器：按 ABI + API level 产出确定性配置值与文本片段。与骨架 CLI 定位的差异见 `README.md`「定位修正」。
+本包是独立发布单元。完整说明（能力边界、公开 API、依赖、验证、风险与未决）见本仓库 `README.md`；公开签名以 `pkg.generated.mbti` 为准。
 
-完整文档见项目根目录与 `docs/` 目录：`README.md`、`docs/DESIGN.md`、`docs/API.md`；设计决策记录见 `docs/DECISIONS.md`。
-
-**当前状态：实现完成，四道门禁全绿，等待集成。**
+许可：Apache-2.0。
