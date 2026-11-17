@@ -675,3 +675,45 @@ pub fn ndk_probe_json(result : NdkProbeResult) -> String {
   parts.push("]}")
   concat_parts(parts)
 }
+
+///|
+/// 解析 NDK 根与版本（纯函数，W2-A）：命令行显式值优先，缺失时用探测结果补齐。
+/// 无法补齐时抛 `NdkNotFound`（消息与 CLI 历史失败文案逐字一致）。
+/// 探测由调用方执行（CLI 侧 `probe_ndk`）；本函数不触发任何 I/O。
+pub fn resolve_ndk_values(
+  cmd : GenCommand,
+  probe : NdkProbeResult,
+) -> (String, String) raise MoonAbiError {
+  let mut root = cmd.ndk_root
+  let mut version = cmd.ndk_version
+  match root {
+    Some(explicit) =>
+      if version is None {
+        match probe.selected {
+          Some(selected) => if selected == explicit { version = probe.version }
+          None => ()
+        }
+      }
+    None => {
+      root = probe.selected
+      if version is None {
+        version = probe.version
+      }
+    }
+  }
+  let ndk_root = match root {
+    Some(r) => r
+    None =>
+      raise NdkNotFound(
+        "NDK not found: set ANDROID_NDK_HOME/ANDROID_HOME or pass --ndk-root",
+      )
+  }
+  let ndk_version = match version {
+    Some(v) => v
+    None =>
+      raise NdkNotFound(
+        "NDK version unknown: pass --ndk-version or provide source.properties",
+      )
+  }
+  (ndk_root, ndk_version)
+}

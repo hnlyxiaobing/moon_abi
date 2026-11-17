@@ -34,6 +34,8 @@ pub fn probe_ndk_with(NdkProbeInputs, (String) -> Bool, (String) -> Array[String
 
 pub fn render(LinkNativeConfig) -> String raise MoonAbiError
 
+pub fn resolve_ndk_values(GenCommand, NdkProbeResult) -> (String, String) raise MoonAbiError
+
 pub async fn sync_config_file(String, String) -> MergeResult raise MoonAbiError
 
 pub fn validate(NdkProfile, Abi) -> ValidationReport raise MoonAbiError

@@ -122,50 +122,28 @@ fn report_error(err : Error) -> Int32 {
 
 ///|
 /// 解析 NDK 根与版本：命令行显式值优先，缺失时用本机探测补齐。
-/// 失败返回可读原因（CLI 映射为退出码 1）。
+/// 判定委托库纯函数 `resolve_ndk_values`（失败抛 NdkNotFound，W2-A）；
+/// 本函数把错误归一为可读原因（CLI 映射为退出码 1，stderr 单行与历史逐字节一致）。
+/// probe 自身失败属异步基础设施通道，保留 String 旁路（文案不变）。
 async fn resolve_ndk(
   cmd : @moon_abi.GenCommand,
 ) -> Result[(String, String), String] {
-  let mut root = cmd.ndk_root
-  let mut version = cmd.ndk_version
-  if root is None || version is None {
-    let probe = @moon_abi.probe_ndk(env_inputs(cmd.ndk_root)) catch {
+  let mut probe : @moon_abi.NdkProbeResult = {
+    found: false,
+    selected: None,
+    version: None,
+    candidates: [],
+    warnings: [],
+  }
+  if cmd.ndk_root is None || cmd.ndk_version is None {
+    probe = @moon_abi.probe_ndk(env_inputs(cmd.ndk_root)) catch {
       e => return Err("NDK probe failed: " + e.to_string())
     }
-    match root {
-      Some(explicit) =>
-        if version is None {
-          match probe.selected {
-            Some(selected) =>
-              if selected == explicit {
-                version = probe.version
-              }
-            None => ()
-          }
-        }
-      None => {
-        root = probe.selected
-        if version is None {
-          version = probe.version
-        }
-      }
-    }
   }
-  let ndk_root = match root {
-    Some(r) => r
-    None =>
-      return Err(
-        "NDK not found: set ANDROID_NDK_HOME/ANDROID_HOME or pass --ndk-root",
-      )
+  let pair = @moon_abi.resolve_ndk_values(cmd, probe) catch {
+    e => return Err(@moon_abi.error_message(e))
   }
-  let ndk_version = match version {
-    Some(v) => v
-    None =>
-      return Err(
-        "NDK version unknown: pass --ndk-version or provide source.properties",
-      )
-  }
-  Ok((ndk_root, ndk_version))
+  Ok(pair)
 }
 
 ///|

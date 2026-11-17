@@ -92,7 +92,7 @@ pub trait ConfigRenderer {
 
 ///|
 /// 内部常量：API level 下限。统一取 21（64 位 ABI 的 NDK 最低 API），
-/// 是 r22+ 全系 NDK 的安全下限；精确版本锁由 `moon_android::ToolchainVersions` 持有。
+/// 是 r22+ 全系 NDK 的保守安全下限；精确版本策略由调用方的 NdkProfile 持有。
 const MIN_API_LEVEL : Int32 = 21
 
 ///|

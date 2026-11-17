@@ -171,6 +171,27 @@ test "parse_gen_args: 参数错误映射退出码 2" {
 }
 
 ///|
+test "parse_gen_args: CliUsage 显式变体簿记（W2）" {
+  let cases : Array[Array[String]] = [
+    [],
+    ["--api", "21"],
+    ["--abi", "x86", "--api", "21", "--bogus"],
+    ["--abi", "x86", "--api"],
+    ["--abi", "x86", "--api", "21", "--out"],
+    ["--abi", "x86", "--api", "21", "--path-style", "plan9"],
+  ]
+  for argv in cases {
+    let err = @test.expect_error(() => @moon_abi.parse_gen_args(argv))
+    match err {
+      @moon_abi.MoonAbiError::CliUsage(reason) =>
+        assert_false(reason.is_empty())
+      _ => fail("expected CliUsage variant")
+    }
+    assert_eq(@moon_abi.exit_code_for_error(err), 2)
+  }
+}
+
+///|
 test "exit_code_for_error: 参数错误 2 / 运行错误 1" {
   let usage_error = @test.expect_error(() => {
     let _ = @moon_abi.parse_gen_args([])
