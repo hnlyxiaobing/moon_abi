@@ -4,6 +4,27 @@
 > 快照由 `moon info` 生成（禁手编）；#skip/SKIPPED 永不计入通过。
 > 配套设计文档：[2026-11-16-ndk-config-fidelity-dev-plan.md](2026-11-16-ndk-config-fidelity-dev-plan.md)。
 
+## 2026-11-26 · M1（W3 fail-closed 输入加固）
+
+> 关闭 B6 / B15 / B19 三处静默放行：以前静默放行的损坏/不安全输入现在拒绝。
+> 行为增强例外流程（退出码集合与消息文本冻结，复用既有变体），见开发文档 §5 W3。
+
+- 新增 pub 声明：无。快照 diff：空（pkg.generated.mbti 与 cmd/main/pkg.generated.mbti 均零漂移）。
+- 测试增量：+5（81→86；wasm 与 native 双目标各 86/86，旧用例零改动全绿，#skip=0）。
+  - moon_abi_test.mbt +2：render 对全部空白字符（tab/CR/LF/VT/FF/空格）token 抛 `PathContainsSpace`；
+    validate 对含 tab 的 ndk_root 报 `PathContainsSpace` 进 errors。
+  - gen_cli_test.mbt +1：merge 单 begin + 多 end 标记抛 `MalformedConfig("multiple managed block end markers")`，退出码 1。
+  - moon_abi_wbtest.mbt +1：`parse_pkg_revision` 对 `Pkg.RevisionFoo=…` 键不误命中，标准键（带空格/紧邻 `=`）仍正确解析。
+  - truncation_scan_wbtest.mbt +1：新增「render 含空白 token 全前缀无 panic」扫描；既有 merge 畸形标记种子扩入多 END 变体、`parse_pkg_revision` 种子扩入误命中/紧邻 `=` 变体。
+- **fail-closed 行为增强登记（以前静默放行 → 现在拒绝）与受影响样本**：
+  1. tab/CR/LF/VT/FF 任一空白字符出现在 cc / stub / cc-flags / cc-link-flags 时，`render` 与 `validate` 由「静默放行 → 拒绝」，抛/报 `PathContainsSpace`（消息文本冻结，仍为 "path contains a space: …"）。受影响样本：含上述空白字符的 token（空格拒绝路径不变）。
+  2. 受管块既有文本出现单 begin + 多 end 标记时，`merge_link_config` 由「接受、孤儿 end 永久残留用户区 → 拒绝」，抛 `MalformedConfig("multiple managed block end markers")`。受影响样本：含多 END 的既有 moon.pkg（CLI `--out` 退出码 1、原文件逐字节未被改写）。
+  3. `parse_pkg_revision` 对 `Pkg.RevisionFoo=…` 类键由「前缀误命中 → 不误命中」，回退目录名/None 路径不变。受影响样本：含该误命中键的 source.properties。
+- 实现要点：`check_no_space`/`validate` 统一走新增私有辅助 `contains_whitespace`（`Char::is_ascii_whitespace`，覆盖 `\u{09}`..`\u{0D}` 与空格）；merge 的多 END 检测与既有多 begin 检测对称（检查首个 END 之后是否还有 END）；`parse_pkg_revision` 要求前缀下一字符为 `=` 或空白。
+- 门禁状态：`moon check --deny-warn` / `moon build` / `moon test`（wasm 与 native 各 86/86） / `moon fmt --check` / `moon info` 快照零漂移 全绿；CLI 冒烟复跑（gen-ok=0、no-args=2、bad-abi=2、api20=2、space-path=1、multi-end out=1 且原文件未改写）符合契约。
+- 验收：T-W3-1 ✓、T-W3-2 ✓、T-W3-3 ✓、T-W3-4 ✓（旧用例零改动全绿）、T-W3-5 ✓（截断/变异扫描无 panic，新解析路径已一行接入扫描）。
+- 待落地（仍按原排期）：W4 CLI extra/多 ABI（M2）、W5 宿主/API 矩阵（M3，数据表先联网核实）、W6-A 外部 oracle runner（M4）。
+
 ## 2026-11-26 · M0-completion（技能 §3 M0 必做项补齐 + 工具链漂移修复）
 
 > 从第一性原理审查 `moonbit-rollout-orchestration` 技能对本仓库的匹配度后，确认

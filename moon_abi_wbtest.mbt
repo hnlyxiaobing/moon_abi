@@ -119,3 +119,29 @@ test "ConfigRenderer 渲染与 render 一致" {
   assert_eq(ConfigRenderer::render(cfg), render(cfg))
   assert_false(ConfigRenderer::render(cfg).contains("stub-cc"))
 }
+
+///|
+/// W3 fail-closed：`Pkg.RevisionFoo` 键不误命中版本（旧 B19），标准键仍正确解析。
+test "parse_pkg_revision: Pkg.RevisionFoo 不误命中 (W3)" {
+  // 标准键：带空格或紧邻 `=` 均解析成功。
+  match
+    parse_pkg_revision("Pkg.Revision = 27.0.12077973\nPkg.Desc = Android NDK\n") {
+    Some(v) => assert_eq(v, "27.0.12077973")
+    None => fail("expected Some from standard spaced key")
+  }
+  match parse_pkg_revision("Pkg.Revision=27.0.12077973") {
+    Some(v) => assert_eq(v, "27.0.12077973")
+    None => fail("expected Some from standard tight key")
+  }
+  // 误命中键 `Pkg.RevisionFoo=…`：前缀命中但下一字符非 `=`/空白，不当作版本。
+  match parse_pkg_revision("Pkg.RevisionFoo = 27.0.12077973") {
+    Some(v) =>
+      fail("Pkg.RevisionFoo must not be treated as a version, got " + v)
+    None => ()
+  }
+  // 仅存在误命中键时 → None（回退目录名/None 路径不变）。
+  match parse_pkg_revision("Pkg.RevisionFoo = 1\nPkg.Desc = x\n") {
+    Some(v) => fail("mis-hit key must not yield a version, got " + v)
+    None => ()
+  }
+}

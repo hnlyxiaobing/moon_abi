@@ -89,6 +89,8 @@ test "truncation scan: merge_link_config 畸形标记全前缀无 panic" {
     "// >>> moon_abi gen:managed (do not edit this block) >>>", "// <<< moon_abi gen:managed <<<",
     "// >>> moon_abi gen:managed (do not edit this block) >>>\n// <<< moon_abi gen:managed <<<",
     "a\n// >>> moon_abi gen:managed (do not edit this block) >>>\nb\n// <<< moon_abi gen:managed <<<",
+    // W3：单 begin + 多 end（旧 B15 孤儿 end）必须进扫描，全前缀不得 panic。
+     "// >>> moon_abi gen:managed (do not edit this block) >>>\n// <<< moon_abi gen:managed <<<\n// <<< moon_abi gen:managed <<<",
     "\n", "// >>>\n// <<<",
   ]
   for seed in seeds {
@@ -101,9 +103,41 @@ test "truncation scan: merge_link_config 畸形标记全前缀无 panic" {
 
 ///|
 /// 截断扫描：`parse_pkg_revision` source.properties 内容全前缀无 panic。
+/// W3：种子覆盖标准键（带空格/紧邻 `=`）与误命中键（`Pkg.RevisionFoo`）。
 test "truncation scan: parse_pkg_revision source.properties 全前缀无 panic" {
-  let seed = "Pkg.Revision = 27.0.12077973\nPkg.Desc = Android NDK 27\n"
-  run_truncation_scan(seed, text => ignore(parse_pkg_revision(text)))
+  let seeds : Array[String] = [
+    "Pkg.Revision = 27.0.12077973\nPkg.Desc = Android NDK 27\n", "Pkg.Revision=27.0.12077973",
+    "Pkg.RevisionFoo = 27.0.12077973\nPkg.Desc = x\n",
+  ]
+  for seed in seeds {
+    run_truncation_scan(seed, text => ignore(parse_pkg_revision(text)))
+  }
+}
+
+///|
+/// 截断扫描：`render` / `check_no_space` 对含空白 token 的输入全前缀无 panic。
+/// W3 新解析路径：任一空白字符（tab/CR/LF/VT/FF）出现在 token 中即 fail-closed
+/// 拒绝；前缀不含空白时仍为合法输出——两者均属扫描允许通道（MoonAbiError 或合法输出）。
+test "truncation scan: render 含空白 token 全前缀无 panic" {
+  let seeds : Array[String] = [
+    "/opt/ndk/bin/aarch64-linux-android21-clang\tx", "C:\\ndk\t\\bin\\aarch64-linux-android21-clang",
+    "/opt/ndk\nbin/aarch64-linux-android21-clang",
+  ]
+  for seed in seeds {
+    run_truncation_scan(seed, cc => {
+      let cfg : LinkNativeConfig = {
+        cc,
+        cc_flags: [],
+        cc_link_flags: [],
+        stub_cc: None,
+        supported_targets: "native",
+        triple: TargetTriple::Aarch64LinuxAndroid,
+        abi: Abi::Arm64V8a,
+        api_level: ApiLevel::{ level: 21, },
+      }
+      ignore(render(cfg))
+    })
+  }
 }
 
 ///|

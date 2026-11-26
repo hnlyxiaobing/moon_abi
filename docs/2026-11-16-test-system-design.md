@@ -4,6 +4,7 @@
 > 配套文档：[2026-11-16-ndk-config-fidelity-dev-plan.md](2026-11-16-ndk-config-fidelity-dev-plan.md)（`T-W*-*` 验收 ID 一一对应；B# 证据行出自该文档 §0）
 > 现状基线：2026-11-16 实跑 `moon test` 68/68（默认 wasm 目标）、`moon test --target native` 68/68、#skip=0；五门禁全绿、双快照零漂移。
 > M0（W1+W2）交付后 2026-11-16 复跑：双目标各 **76/76**（+8，旧用例零改动）、#skip=0；错误簿记 **11/11** 达成；快照 diff 纯加法（resolve_ndk_values）；T-W2-2 防火墙实测通过（resolve 失败路径 stdout/stderr SHA-256 与基线一致）。
+> M1（W3）交付后 2026-11-26 复跑：双目标各 **86/86**（+5，旧用例零改动）、#skip=0；快照 diff 空；T-W3-1..5 全绿；新解析路径随包一行接入截断扫描。
 
 ## 1. 第一性原理：本库的正确性是什么
 
@@ -97,17 +98,17 @@ R runner：样本路径+登记哈希 → 哈希不符拒绝执行 → 规范化�
 |---|---|---|---|---|---|---|---|---|
 | F1 | ABI/triple/wrapper 命名 | ✓ | ✗ | ✓ | ✗ | ✓ | 4 ABI×多 level golden（B2） | 位翻转口径→W3 随包 |
 | F2 | generate 配置值 | ✓ | ✗ | ✓ | ✗ | ✓ | 逐字段+extra 顺序（B4） | 多 ABI→W4；宿主→W5 |
-| F3 | render 确定性/转义 | ✓ | ◐ | ✓ | ✗ | ✓ | golden 6 组+双次渲染（B5） | 空白变体→W3 |
-| F4 | validate 报告 | ✓ | ✗ | ✗ | ✗ | ✗ | 三例（B7） | 上限 advisory→W5；空白→W3 |
+| F3 | render 确定性/转义 | ✓ | ◐ | ✓ | ✗ | ✓ | golden 6 组+双次渲染（B5） | 空白变体已落地(W3) |
+| F4 | validate 报告 | ✓ | ✗ | ✗ | ✗ | ✗ | 三例（B7） | 上限 advisory→W5；空白已落地(W3) |
 | F5 | CLI 解析/退出码 | ✓ | ◐ | ✗ | ✗ | ◐ | 14+5 负例、17 场景手工实跑（B11/B13） | 脚本固化→W4；extra→W4 |
-| F6 | 受管块合并 | ✓ | ◐ | ✓ | ✗ | ✓ | 三态+CRLF+畸形（B14） | 多 END→W3；变异全集→W3 |
+| F6 | 受管块合并 | ✓ | ◐ | ✓ | ✗ | ✓ | 三态+CRLF+畸形（B14） | 多 END 已落地(W3)；变异全集→W3 |
 | F7 | 写配置双通道 | ✓ | ✗ | ✗ | ✗ | ✓ | 注入三失败+FS 三例（B16/B17） | 双通道自动差分→W3 随包 |
-| F8 | NDK 探测 | ✓ | ◐ | ◐ | ✗ | ✓ | 纯核心 7+FS 3+边界 4（B18/B20） | 键名变体→W3；排序律→W3 随包 |
+| F8 | NDK 探测 | ✓ | ◐ | ◐ | ✗ | ✓ | 纯核心 7+FS 3+边界 4（B18/B20） | 键名变体已落地(W3)；排序律→W3 随包 |
 | F9 | 错误模型 | ✓ | ✗ | ✗ | ✗ | ✓ | 显式簿记 11/11（W2 已交付，原 B9/B10 缺口已闭） | — |
 | F10 | 路径风格推断 | ✓ | ✗ | ✗ | ✗ | ✓ | 盘符/反斜杠/空串（B12 相关） | 混合分隔符样本→W5 |
 | S1 | 预期场景端到端（gen 打印/写盘/幂等、probe 文本/JSON） | | | | | ◐ | 17 场景手工基线（B13） | 脚本固化→W4 |
-| S2 | 安全拒绝场景（空格/畸形/越界先于写盘整体拒绝） | ✓ | | | | ✓ | 实跑 malformed 时原文件未被改写（B13/B14） | 多 END/空白→W3 |
-| C1 | 输入安全（畸形不 panic/内存有界） | ◐ | ✗ | | | | 错误注入覆盖，无系统截断/变异 | 截断+变异→W3 |
+| S2 | 安全拒绝场景（空格/畸形/越界先于写盘整体拒绝） | ✓ | | | | ✓ | 实跑 malformed 时原文件未被改写（B13/B14） | 多 END/空白已落地(W3)；越界→W3 |
+| C1 | 输入安全（畸形不 panic/内存有界） | ◐ | ◐ | | | | 错误注入覆盖+W3 截断扫描（render 空白 token 全前缀） | 变异体→W3/W4 随包 |
 | C2 | 防火墙（新函数不改旧语义） | ◐ | ✗ | | | ◐ | T-W2-2 已过（W2 失败路径逐字节差分）；其余未固化 | P7/T-W4-4/T-W5-2→W4/W5 |
 | C3 | 许可红线（F-D 零入库） | ✓ | | | | | 临时目录自产+用后即焚（B36） | R runner 哈希门禁→W6 |
 | C4 | 契约稳定（快照/记录行/退出码） | ✓ | | ✓ | | ✓ | CI 快照门禁+实跑矩阵（B24） | 簿记/引用扫描门禁→W1/W2 |
@@ -120,12 +121,12 @@ R runner：样本路径+登记哈希 → 哈希不符拒绝执行 → 规范化�
 | UnsupportedApiLevel | ✓ clang_name(20/0)、generate(16)、parse(--api 20) | 无 |
 | MissingNdkRoot | ✓ generate("" / "   ") | 无 |
 | MissingClang | ✓ render(cc="  ") | 无 |
-| PathContainsSpace | ✓ render 空格路径/空格 flag | tab/CR/LF/VT/FF 逐类（W3） |
+| PathContainsSpace | ✓ render 空格路径/空格 flag；render 全空白字符 token（W3）+ validate 含 tab（W3） | 已落地(W3) |
 | InvalidTriple | ✓ render(triple≠abi) | 无 |
 | VersionMismatch | ✓ generate(r21/banana/"") | 无 |
 | CliUsage | ✓ 显式 `CliUsage(_)` 6 例 + 退出码 2（W2 已交付） | 无 |
 | IoFailure | ✓ write_config_with 权限/磁盘满/读失败 + sync FS 父目录缺失/空路径 | 无 |
-| MalformedConfig | ✓ 不成对/多 begin/end 先于 begin/空块 | 多 END 标记（W3） |
+| MalformedConfig | ✓ 不成对/多 begin/end 先于 begin/空块；多 END 标记（W3） | 已落地(W3) |
 | NdkNotFound | ✓ resolve_ndk_values 触发 2 例（not-found/version-unknown，消息冻结断言）+ 构造级 1 例（W2 已交付，死变体状态消除） | 无 |
 
 显式簿记 **11/11**（W2 已交付，2026-11-16 实测；原基线 9/11），门禁化（§8.3）。注：pub suberror 变体在定义包外只读，构造级断言只能落库包内 whitebox 测试（ndk_resolve_wbtest.mbt）；黑盒侧用 expect_error 匹配变体名。
@@ -144,9 +145,9 @@ R runner：样本路径+登记哈希 → 哈希不符拒绝执行 → 规范化�
 
 | 用例 | 位置 | 原因 |
 |---|---|---|
-| （无） | — | 当前基线零 #skip（2026-11-16 M0 后实测：源码 Grep #skip=0，moon test 76/76） |
+| （无） | — | 当前基线零 #skip（2026-11-26 M1/W3 后实测：源码 Grep #skip=0，moon test 86/86） |
 
-计数口径：76 条声明 − 0 条 #skip = 76 执行（2026-11-16 M0 后，wasm 与 native 双目标各 76/76；M0 前基线 68）；`--include-skipped` 结果单独报告。W6 若落地，R 层占位用例以 #skip 入库并在此表单列。
+计数口径：86 条声明 − 0 条 #skip = 86 执行（2026-11-26 M1/W3 后，wasm 与 native 双目标各 86/86；M0 后基线 76；M0 前基线 68）；`--include-skipped` 结果单独报告。W6 若落地，R 层占位用例以 #skip 入库并在此表单列。
 
 ### 6.5 验收 ID 双向追溯表
 
@@ -159,11 +160,11 @@ R runner：样本路径+登记哈希 → 哈希不符拒绝执行 → 规范化�
 | T-W2-1 错误簿记 11/11 显式变体断言 | W2（已交付 ✓） | F9 | A2/L0+L5 |
 | T-W2-2 选项 A：CLI 失败路径 stderr/退出码逐字节一致 | W2（已交付 ✓） | C2 | A5/L4 防火墙 |
 | T-W2-3 NdkNotFound 触发/构造用例 | W2（已交付 ✓） | F9 | A2/L0 |
-| T-W3-1 tab/换行 token → PathContainsSpace（render+validate） | W3 | F3、F4、C1 | A2/L0 |
-| T-W3-2 多 END → MalformedConfig | W3 | F6、S2 | A2/L0 |
-| T-W3-3 Pkg.RevisionFoo 不误命中 | W3 | F8 | A2/L0 |
-| T-W3-4 防火墙回归：旧 68 用例零改动全绿 | W3 | C2 | A5/L5 |
-| T-W3-5 截断/变异扫描无 panic | W3 | C1 | A4/L1 |
+| T-W3-1 tab/换行 token → PathContainsSpace（render+validate） | W3（已交付 ✓） | F3、F4、C1 | A2/L0 |
+| T-W3-2 多 END → MalformedConfig | W3（已交付 ✓） | F6、S2 | A2/L0 |
+| T-W3-3 Pkg.RevisionFoo 不误命中 | W3（已交付 ✓） | F8 | A2/L0 |
+| T-W3-4 防火墙回归：旧 68 用例零改动全绿 | W3（已交付 ✓） | C2 | A5/L5 |
+| T-W3-5 截断/变异扫描无 panic | W3（已交付 ✓） | C1 | A4/L1 |
 | T-W4-1 parse_gen_args_ext 新选项+旧参数 base 等价 | W4 | F5 | A1/A5/L0 |
 | T-W4-2 generate_multi 顺序/确定性/空数组错误 | W4 | F2 | A1/L0+L1 |
 | T-W4-3 --out+多 ABI → CliUsage 退出码 2 | W4 | F5、S2 | A5/L4 |
@@ -234,8 +235,8 @@ moon build --target native  # CLI E2E 前置
 
 落地验收（逐层勾选）：
 
-- [x] L0：76 条全绿（M0 后，原 68 基线零改动）；簿记 11/11 已达成（W2）；W4/W5 新函数各附样例（待落地）
-- [ ] L1：P1-P8 变形律自动化；截断扫描+≥1000 变异体/轮（W3 起）
+- [x] L0：86 条全绿（M1/W3 后，原 76/68 基线零改动）；簿记 11/11 已达成（W2）；W4/W5 新函数各附样例（待落地）
+- [◐] L1：P1-P8 变形律自动化；截断扫描（W3 新解析路径已一行接入：render 空白 token/merge 多 END/键名变体）；≥1000 变异体/轮仍待 W3/W4 随包补齐
 - [ ] L2：render golden 维持；probe 记录行/merge 三态 golden 扩充（W3/W4）
 - [ ] L3/R：未实现（W6 已裁决 A，M4 落地；不得预写通过）
 - [ ] L4：17 场景基线脚本固化（W4）；新增多 ABI 两场景

@@ -461,6 +461,40 @@ test "render: flag 含空格抛 PathContainsSpace" {
 }
 
 ///|
+/// W3 fail-closed：render 对全部空白字符（tab/CR/LF/VT/FF）提前拒绝（PathContainsSpace）。
+test "render: 全部空白字符 token 抛 PathContainsSpace (W3)" {
+  let whitespaces = ["\t", "\r", "\n", "\u{000B}", "\u{000C}", " "]
+  for ws in whitespaces {
+    let cfg = @moon_abi.LinkNativeConfig::{
+      cc: "/opt/ndk/bin/aarch64-linux-android21-clang" + ws + "x",
+      cc_flags: [],
+      cc_link_flags: [],
+      stub_cc: None,
+      supported_targets: "native",
+      triple: @moon_abi.TargetTriple::Aarch64LinuxAndroid,
+      abi: @moon_abi.Abi::Arm64V8a,
+      api_level: @moon_abi.ApiLevel::{ level: 21, },
+    }
+    let e = @test.expect_error(() => @moon_abi.render(cfg))
+    match e {
+      @moon_abi.MoonAbiError::PathContainsSpace(_) => ()
+      _ => fail("expected PathContainsSpace for whitespace '" + ws + "'")
+    }
+  }
+}
+
+///|
+/// W3 fail-closed：validate 对含 tab 的 ndk_root 报 PathContainsSpace 进 errors。
+test "validate: 含 tab 的 ndk_root 报 PathContainsSpace (W3)" {
+  let report = @moon_abi.validate(
+    profile("/opt/ndk\tx", "r27", 21, false),
+    @moon_abi.Abi::Arm64V8a,
+  )
+  assert_false(report.ok)
+  assert_true(report.errors[0].contains("PathContainsSpace"))
+}
+
+///|
 /// render：cc 缺失报 `MissingClang`。
 test "render: 空 cc 抛 MissingClang" {
   let cfg = @moon_abi.LinkNativeConfig::{

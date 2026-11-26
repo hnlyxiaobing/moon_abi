@@ -343,6 +343,22 @@ test "merge_link_config: 畸形标记抛 MalformedConfig 且退出码 1" {
 }
 
 ///|
+/// W3 fail-closed：单 begin + 多 end 标记抛 MalformedConfig（旧 B15：孤儿 end 静默残留）。
+test "merge_link_config: 多 END 标记抛 MalformedConfig (W3)" {
+  let block = block_or_fail()
+  let multi_end = "// >>> moon_abi gen:managed (do not edit this block) >>>\noptions()\n// <<< moon_abi gen:managed <<<\n// <<< moon_abi gen:managed <<<\n"
+  let err = @test.expect_error(() => {
+    @moon_abi.merge_link_config(multi_end, block)
+  })
+  match err {
+    @moon_abi.MoonAbiError::MalformedConfig(msg) =>
+      assert_true(msg.contains("multiple managed block end markers"))
+    _ => fail("expected MalformedConfig (multiple end markers)")
+  }
+  assert_eq(@moon_abi.exit_code_for_error(err), 1)
+}
+
+///|
 test "write_config_with: 不存在则追加并写盘" {
   let block = block_or_fail()
   let written : Array[String] = []

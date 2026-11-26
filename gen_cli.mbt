@@ -373,6 +373,13 @@ pub fn merge_link_config(
       if tail.find(BLOCK_BEGIN) is Some(_) {
         raise MalformedConfig("multiple managed blocks are not supported")
       }
+      // W3 fail-closed：拒绝多个结束标记（旧 B15：单 begin + 多 end 时孤儿 end
+      // 永久残留用户区，属损坏输入静默放行）。与上方多 begin 检查对称，
+      // 检查首个结束标记之后是否还有第二个结束标记。
+      let after_end = existing[e + BLOCK_END.length():].to_owned()
+      if after_end.find(BLOCK_END) is Some(_) {
+        raise MalformedConfig("multiple managed block end markers")
+      }
       // 块文本自带结束标记后的换行；若原文在结束标记后还有一个行尾换行，
       // 该换行属于标记行本身，替换时吞掉，保证「同内容二次合并 = Unchanged」。
       let mut suffix = existing[e + BLOCK_END.length():].to_owned()

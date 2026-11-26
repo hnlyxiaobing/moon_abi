@@ -258,18 +258,27 @@ fn roots_from_parents(
 ///|
 /// 解析 `source.properties` 中的 `Pkg.Revision`（官方 NDK 的版本来源）。
 /// 找不到返回 `None`；纯函数、不读取文件。
+/// W3 fail-closed：前缀命中后要求下一字符为 `=` 或空白，否则继续扫描；
+/// `Pkg.RevisionFoo=…` 之类键不再误命中（旧 B19 缺口），回退目录名/None 路径不变。
 fn parse_pkg_revision(text : String) -> String? {
+  let prefix = "Pkg.Revision"
+  let prefix_len = prefix.length()
   for raw in text.split("\n") {
     let line = raw.trim().to_owned()
-    if line.has_prefix("Pkg.Revision") {
-      match line.find("=") {
-        Some(pos) => {
-          let value = line[pos + 1:].trim().to_owned()
-          if !value.is_empty() {
-            return Some(value)
+    if line.has_prefix(prefix) && line.length() > prefix_len {
+      let chars = line.to_array()
+      let next = chars[prefix_len]
+      if next == '=' || next.is_ascii_whitespace() {
+        let eq = line.find("=")
+        match eq {
+          Some(pos) => {
+            let value = line[pos + 1:].trim().to_owned()
+            if !value.is_empty() {
+              return Some(value)
+            }
           }
+          None => ()
         }
-        None => ()
       }
     }
   }

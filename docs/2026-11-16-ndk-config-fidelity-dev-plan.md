@@ -1,6 +1,6 @@
 # moon_abi NDK 配置忠实性与边界加固开发文档
 
-> 建立：2026-11-16 ｜ 状态：M0 已交付（W1+W2，2026-11-16），M1 起待开发 ｜ 适用仓库：本仓库（独立自包含）
+> 建立：2026-11-16 ｜ 状态：M1（W3）已交付（2026-11-26），M2 起待开发 ｜ 适用仓库：本仓库（独立自包含）
 > 裁决记录：2026-11-16 用户确认采纳推荐项——**W2-A**（NdkNotFound 接线）、**W6-A**（本地 NDK oracle runner）。
 > 配套文档：[2026-11-16-test-system-design.md](2026-11-16-test-system-design.md)（验收测试 ID `T-W*-*` 出自该文档）
 > 本文所有「现状」结论均为 2026-11-16 对本仓库源码的实测核对，非转述历史文档。
@@ -33,7 +33,7 @@
 | B3 | 已实现：API≥21（MIN_API_LEVEL=21）、NDK major≥22（MIN_NDK_VERSION="r22+"）；`ndk_major` 接受 rXX/rXXc/点分版本号，不可解析→VersionMismatch | moon_abi.mbt 常量区与 `ndk_major`/`check_ndk_version`；wbtest「ndk_major」两例 |
 | B4 | 已实现：generate 注入 `--target=<triple><api>`、`-llog -landroid`、extra_cc_flags 原序、extra_link_libs 加 `-l` 前缀；stub_cc=Some(cc)；supported_targets="native" | moon_abi.mbt `generate` L350-385；moon_abi_test.mbt「4 ABI 字段逐项断言」「extra flags 注入顺序」 |
 | B5 | 已实现：render 确定性文本（内嵌 golden：4 ABI×API21、API35、Windows 风格）；escape_dsl 转义 `\` 与 `"`；stub_cc=None 省略 stub-cc 行；双次渲染逐字相等有测试 | moon_abi.mbt `do_render`/`escape_dsl`；moon_abi_test.mbt golden 三例与「双次渲染确定性」 |
-| B6 | 缺口：空格策略仅检查 `' '`（`contains_char(' ')`）；tab/换行/回车含于 cc/stub/flags 时静默放行，渲染出的 DSL 字符串可能断裂 | moon_abi.mbt `check_no_space` L211-215、`do_render` L290-300 |
+| B6 | **已修复（W3，2026-11-26）**：空格策略原仅检查 `' '`（`contains_char(' ')`）；现 `check_no_space` 拒绝全部空白字符（`Char::is_ascii_whitespace`：空格/tab/CR/LF/VT/FF），含 tab/换行/回车于 cc/stub/flags 时不再静默放行，渲染不再产生断裂 DSL | moon_abi.mbt `contains_whitespace` / `check_no_space` L208-224；moon_abi_test.mbt「render: 全部空白字符 token 抛 PathContainsSpace (W3)」 |
 | B7 | 已实现（含边界）：validate ok=errors.is_empty()；warnings 三类 empty_entry/duplicate_link_lib/path_style_mismatch；ndk_root 为空时 extra token 的空格检查被跳过（位于 !is_blank 分支内） | moon_abi.mbt `validate` L412-492；moon_abi_test.mbt validate 三例 |
 | B8 | 已实现：MoonAbiError 共 11 变体（7 核心 + 4 R4 加法），与历史口径一致 | moon_abi.mbt L69-82；pkg.generated.mbti L47-59 |
 | B9 | 缺口（死变体）：`NdkNotFound(String)` 全仓库零 raise 点，仅在 exit_code_for_error/error_message/CLI report_error 被匹配；CLI resolve_ndk 失败走 Err(String) 旁路；显式测试 0 条 | Grep 全仓库 NdkNotFound（5 处均为声明/匹配）；cmd/main/main.mbt `resolve_ndk` L126-169 |
@@ -42,16 +42,16 @@
 | B12 | 已实现：abi_from_name 别名（armv7/aarch64/x64 等）+ 大小写/前后空白归一；非法名抛 UnsupportedAbi(原始输入) | gen_cli.mbt L95-108；gen_cli_test.mbt 两例 |
 | B13 | 已实现（实跑验证）：退出码契约 0/1/2。2026-11-16 native CLI 17 场景实跑全部符合：no-args=2、help=0、version=0、unknown-sub=2、bad-abi=2、api20=2、missing-abi=2、ok-stdout=0、space-path=1、r21=1、probe-bad-opt=2、probe-notfound=1、out-first=0(appended)、out-idempotent=0(unchanged)、out-malformed=1、out-missing-dir=1 | gen_cli.mbt `exit_code_for_error`；cmd/main/main.mbt；本机冒烟脚本实跑记录 |
 | B14 | 已实现：managed_block=BEGIN+render+END+`\n`；merge 三态 Appended/Replaced/Unchanged；块外内容逐字保留；CRLF 块收敛到 LF 规范块；畸形标记（不成对/多 begin/end 先于 begin/空块）→MalformedConfig | gen_cli.mbt `managed_block`/`merge_link_config` L343-408；gen_cli_test.mbt、r4_edge_test.mbt |
-| B15 | 缺口（fail-open 灰区）：merge 只检测多个 BEGIN，不检测多个 END；「1 begin + 2 end」输入被接受，替换后孤儿 end 永久残留用户区 | gen_cli.mbt L363-392（tail.find 仅查 BLOCK_BEGIN） |
+| B15 | **已修复（W3，2026-11-26）**：merge 原只检测多个 BEGIN，不检测多个 END，「1 begin + 2 end」被接受致孤儿 end 残留；现单 begin + 多 end 抛 `MalformedConfig("multiple managed block end markers")` | gen_cli.mbt `merge_link_config` L374-381（after_end 对称检查）；gen_cli_test.mbt「多 END 标记抛 MalformedConfig (W3)」 |
 | B16 | 已实现：write_config_with 注入式读/写；Unchanged 不调用 write；读/写失败→IoFailure(path,reason)；空路径→IoFailure；权限拒绝/磁盘满/读失败注入均有显式变体断言 | gen_cli.mbt L416-439；gen_cli_test.mbt write_config_with 三例 |
 | B17 | 已实现：sync_config_file 真实 FS 版语义与注入版一致；exists 失败→按不存在处理；读/写失败→IoFailure；临时目录受控测试 3 条（写入/幂等/替换、父目录缺失、空路径） | gen_cli.mbt L445-470；gen_cli_fs_test.mbt |
 | B18 | 已实现：probe_ndk_with 纯核心；优先级 Explicit→NDK_HOME→ANDROID_HOME/ndk→SDK_ROOT/ndk→常见路径；ndk-bundle 展开；版本目录降序（major 降序、同 major 字符串升序）；路径去重；usable=toolchains/llvm/prebuilt 存在；版本=source.properties Pkg.Revision 优先、目录名回退；结构化告警 | ndk_probe.mbt `probe_parents`/`roots_from_parents`/`evaluate_roots`；ndk_probe_test.mbt 7 例、r4_edge_test.mbt |
-| B19 | 缺口（健壮性）：parse_pkg_revision 用 `has_prefix("Pkg.Revision")` 前缀匹配，`Pkg.RevisionFoo=…` 之类键会被误命中 | ndk_probe.mbt L261-277 |
+| B19 | **已修复（W3，2026-11-26）**：parse_pkg_revision 原用 `has_prefix("Pkg.Revision")` 前缀匹配，`Pkg.RevisionFoo=…` 误命中；现要求前缀下一字符为 `=` 或空白，误命中键不再被当作版本，回退目录名/None 路径不变 | ndk_probe.mbt `parse_pkg_revision` L258-282；moon_abi_wbtest.mbt「parse_pkg_revision: Pkg.RevisionFoo 不误命中 (W3)」 |
 | B20 | 已实现：probe_ndk 真实 FS 包装「预取事实→纯核心判定」，权限失败降级为不存在/不可读、不 panic；伪 NDK/伪 SDK 临时目录测试 2 条；「全未找到」用全空闭包经纯核心确定性覆盖（注释明示 GitHub runner 预装 NDK 不可确定性构造） | ndk_probe.mbt L440-489；ndk_probe_fs_test.mbt 3 例 |
 | B21 | 已实现（含契约局限）：ndk_probe_text 记录行 `NDK|…`/`CAND|…`/`WARN|…`；ndk_probe_json 单行、字段序确定、json_escape 覆盖引号/反斜杠/控制字符（\uXXXX）。局限：路径含 `|` 或换行时文本记录行无转义，解析会歧义（未文档化） | ndk_probe.mbt L603-677；ndk_probe_test.mbt「转义合法」、r4_edge_test.mbt「JSON 单行」 |
 | B22 | 缺口（宿主覆盖）：cc_path 宿主标签仅 windows-x86_64 / linux-x86_64，无 darwin 宿主；macOS 主机无法生成正确 prebuilt 路径 | moon_abi.mbt `cc_path` L255-276 |
 | B23 | 缺口（版本纵深）：无 API 上限/NDK 版本×API 矩阵校验；level=100000 可通过 generate（parse 层仅 cap 100000）；无「level 高于该 NDK 已知最高 API」告警 | moon_abi.mbt `check_api_level`；gen_cli.mbt `parse_api_level_value` |
-| B24 | 实测基线：五门禁全绿（见文档头）；wasm 与 native 双目标各 68/68；#skip=0；工作树干净 | 2026-11-16 本机实跑 |
+| B24 | 实测基线：五门禁全绿（见文档头）；wasm 与 native 双目标各 86/86（M1/W3 后，2026-11-26）；#skip=0；工作树干净 | 2026-11-26 本机实跑 |
 | B25 | 计数重测：测试声明 68 条 = gen_cli_test 16 + moon_abi_test 21 + wbtest 9 + ndk_probe_test 7 + ndk_probe_fs_test 3 + gen_cli_fs_test 3 + r4_edge_test 9；与 README「68/68」口径一致 | 逐文件 Select-String 重数 + moon test 实跑 |
 | B26 | 漂移（计数）：`git rev-list --count HEAD` = **16**，历史申报口径「15 条有效提交」滞后 +1 | 2026-11-16 git 实测 |
 | B27 | 漂移（API 索引）：README §3 索引缺 4 条 pub 声明：`pub async fn probe_ndk`、`pub async fn sync_config_file`、`pub fn MoonAbiError::to_repr`、`pub trait ConfigRenderer`（索引只抽 `pub fn` 行，漏 async/方法/trait） | README.md L32-65 ↔ pkg.generated.mbti 逐条核对 |
@@ -165,17 +165,17 @@
 **实现要点（实测落地）**：CliUsage 显式变体断言 6 例（gen_cli_test.mbt）；NdkNotFound 触发级 2 例（ndk_resolve_test.mbt 注入式探测结果，含历史 CLI 无法确定性构造的 not-found 路径）+ 构造级 1 例（ndk_resolve_wbtest.mbt）；resolve_ndk_values 行为样例共 6 例；簿记表（测试文档 §6.2）已刷新为 11/11。
 **验收（实测结果）**：T-W2-1 ✓（11/11 显式变体断言）；T-W2-2 ✓（两条失败路径 stdout/stderr SHA-256 与基线一致、exit=1）；T-W2-3 ✓（触发 2 例 + 构造 1 例）。测试增量 +8（68→76），旧用例零改动全绿；快照 diff 纯加法。
 
-### W3 fail-closed 输入加固（P1/S）
+### W3 fail-closed 输入加固（P1/S，已交付 2026-11-26）
 
-**目标**：关闭 B6/B15/B19 三处静默放行。
-**非目标**：不新增错误变体；不改合法输入的任何输出；不做自动引号/自动修复。
-**新增 API**：无（mbti diff 为空）。
+**目标**：关闭 B6/B15/B19 三处静默放行。——已达成（2026-11-26）。
+**非目标**：不新增错误变体；不改合法输入的任何输出；不做自动引号/自动修复。——均满足。
+**新增 API**：无（mbti diff 为空，双快照零漂移）。
 **实现要点**：
 - `check_no_space` 扩展为拒绝全部空白字符（空格/tab/CR/LF/垂直制表/换页），复用 `PathContainsSpace(token)`；`validate` 的空格检查同步扩展（含 ndk_root 为空分支外的 extra token 检查维持现序）。错误消息不变（仍 "path contains a space: …"，消息文本冻结）。
 - `merge_link_config`：统计 BLOCK_END 出现次数 ≥2 → `MalformedConfig("multiple managed block end markers")`（复用变体，新消息文本属加法）。
 - `parse_pkg_revision`：前缀命中后要求下一字符为 `=` 或空白，否则继续扫描；`Pkg.RevisionFoo` 不再误命中，回退目录名/None 路径不变。
 - 三项均属 fail-closed 修复例外：CHANGELOG 显式登记「以前静默放行的损坏/不安全输入现在拒绝」；回归确认既有 68 用例零改动全绿、仅含 tab/换行/多 END/误命中键的构造样本行为变化。
-**验收**：T-W3-1（tab/换行 token → PathContainsSpace，render 与 validate 双通道）、T-W3-2（多 END → MalformedConfig）、T-W3-3（Pkg.RevisionFoo 不误命中）、T-W3-4（防火墙回归：旧用例零改动全绿）、T-W3-5（截断/变异扫描无 panic）。
+**验收（实测结果）**：T-W3-1 ✓（render 全空白字符 token 抛 PathContainsSpace，validate 含 tab 报 PathContainsSpace）；T-W3-2 ✓（多 END → MalformedConfig）；T-W3-3 ✓（Pkg.RevisionFoo 不误命中）；T-W3-4 ✓（旧用例零改动全绿，wasm/native 各 86/86）；T-W3-5 ✓（截断/变异扫描无 panic，新解析路径随包一行接入扫描）。测试增量 +5（81→86），快照 diff 空。
 
 ### W4 CLI 扩展：extra 选项与多 ABI（P1/M）
 
@@ -240,7 +240,7 @@ pub fn api_level_advisory(NdkProfile) -> Array[String]
 
 ```text
 M0（第1日）   W1 漂移清理（零风险）＋ W2-A 落地（簿记补齐 + NdkNotFound 接线）
-M1            W3 fail-closed 加固（安全缺口，行为增强例外流程）
+M1            W3 fail-closed 加固（安全缺口，行为增强例外流程）✅ 已交付 2026-11-26
 M2            W4 CLI extra/多 ABI（高价值低成本，历史「后续」清单）
 M3            W5 宿主/API 矩阵纵深（数据表先联网核实再合入）
 M4            W6-A 外部 oracle runner（已裁决 A，M3 后启动）
@@ -257,20 +257,25 @@ M4            W6-A 外部 oracle runner（已裁决 A，M3 后启动）
 
 ## 8. 完成定义（DoD，逐包勾选）
 
-- [ ] 新增 API 与 mbti 草案一致（偏差回写本文）
-- [ ] 快照 diff 纯加法（W1/W2/W3 为空 diff），CHANGELOG 已登记
-- [ ] T-W*-* 验收全绿；#skip 显式标注原因
-- [ ] 五门禁全绿；CLI 对外契约零意外漂移（退出码矩阵 + 记录行格式 + 消息文本）
-- [ ] 防火墙回归：新函数合入后旧 API 在既有语料上输出逐字节不变/旧用例零改动全绿（纯文档包豁免）
-- [ ] 畸形语料无 panic（新增解析路径进截断扫描）
-- [ ] 零新第三方依赖；零许可不明二进制入库
-- [ ] README 能力/非目标同步；本文状态行更新「已交付+日期」
+> M1/W3 已交付（2026-11-26），逐项核验通过：新增 API 无（mbti diff 空）；快照 diff 空；
+> T-W3-1..5 全绿（#skip=0）；五门禁全绿、CLI 退出码矩阵 + 消息文本冻结（冒烟复跑）；
+> 防火墙回归旧用例零改动全绿（wasm/native 各 86/86）；新解析路径已随包一行接入截断扫描；
+> 零新第三方依赖；README/状态行已同步。
+
+- [x] 新增 API 与 mbti 草案一致（偏差回写本文）—— W3 无新增 API
+- [x] 快照 diff 纯加法（W1/W2/W3 为空 diff），CHANGELOG 已登记
+- [x] T-W*-* 验收全绿；#skip 显式标注原因（#skip=0）
+- [x] 五门禁全绿；CLI 对外契约零意外漂移（退出码矩阵 + 记录行格式 + 消息文本）
+- [x] 防火墙回归：新函数合入后旧 API 在既有语料上输出逐字节不变/旧用例零改动全绿
+- [x] 畸形语料无 panic（新增解析路径进截断扫描）
+- [x] 零新第三方依赖；零许可不明二进制入库
+- [x] README 能力/非目标同步；本文状态行更新「已交付+日期」
 
 ## 9. 风险登记
 
 | 风险 | 等级 | 缓解 |
 |---|---|---|
-| W3 fail-closed 改变下游含 tab/换行样本的行为 | 中 | 行为增强例外流程：CHANGELOG 显式登记 + 回归确认仅受影响样本变化；消息文本与退出码集合冻结 |
+| W3 fail-closed 改变下游含 tab/换行样本的行为 | 中 | 已执行（M1 落地 2026-11-26）：CHANGELOG 显式登记受影响样本清单；回归确认仅受影响样本变化、旧用例零改动全绿；消息文本与退出码集合冻结（CLI 冒烟复跑符合契约） |
 | W4 cmd 解析器切换引入旧参数行为漂移 | 中 | T-W4-4 十七场景逐字节防火墙差分；base 构造与旧解析器等价性单测 |
 | W5 darwin 标签/API 矩阵数据未核实即合入 | 中 | 数据表逐项 [需联网核实] 前置；核实前 W5 不合入；新函数隔离，旧 API 零风险 |
 | W2 选项 A 改动 CLI 错误通道 | 低 | 消息/退出码逐字节断言；选项 B 零成本降级随时可退 |

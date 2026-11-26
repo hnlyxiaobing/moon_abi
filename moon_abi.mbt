@@ -206,10 +206,24 @@ fn check_ndk_version(version : String) -> Unit raise MoonAbiError {
 }
 
 ///|
-/// 校验单个命令行 token 不含空格；空格会把 cc 命令断裂，抛 `PathContainsSpace(token)`。
+/// 判断字符串是否含任一 ASCII 空白字符（空格 / tab / CR / LF / VT / FF）。
+/// 这些字符都会把 cc 命令 / DSL 字符串断裂，故统一提前拒绝（fail-closed）。
+fn contains_whitespace(s : String) -> Bool {
+  for c in s.to_array() {
+    if c.is_ascii_whitespace() {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// 校验单个命令行 token 不含空白字符；空白会把 cc 命令断裂，抛 `PathContainsSpace(token)`。
 /// 这是 Windows 路径空格的统一策略：提前拒绝、不自动加引号（引号语义随 shell 变化）。
+/// W3 fail-closed：从仅拒绝空格扩为拒绝全部空白（含 tab/CR/LF/VT/FF），
+/// 否则渲染出的 DSL 字符串可能断裂（旧 B6 缺口）。
 fn check_no_space(token : String) -> Unit raise MoonAbiError {
-  if token.contains_char(' ') {
+  if contains_whitespace(token) {
     raise PathContainsSpace(token)
   }
 }
@@ -453,11 +467,11 @@ pub fn validate(
       tname,
       profile.api_level.level,
     )
-    if cc.contains_char(' ') {
+    if contains_whitespace(cc) {
       errors.push("PathContainsSpace: " + cc)
     }
     for f in profile.extra_cc_flags {
-      if f.contains_char(' ') {
+      if contains_whitespace(f) {
         errors.push("PathContainsSpace: " + f)
       }
       if f.is_empty() {
@@ -466,7 +480,7 @@ pub fn validate(
     }
     for lib in profile.extra_link_libs {
       let flag = "-l" + lib
-      if flag.contains_char(' ') {
+      if contains_whitespace(flag) {
         errors.push("PathContainsSpace: " + flag)
       }
       if lib.is_empty() {
