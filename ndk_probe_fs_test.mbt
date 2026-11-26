@@ -8,7 +8,7 @@ async test "probe_ndk: 受控伪 NDK 目录（显式根，不依赖真 NDK）" {
   @fs.mkdir(
     root + "/toolchains/llvm/prebuilt",
     recursive=true,
-    allow_exist=true,
+    allow_existing=true,
   ) catch {
     e => fail("mkdir failed: " + e.to_string())
   }
@@ -33,7 +33,7 @@ async test "probe_ndk: 受控伪 NDK 目录（显式根，不依赖真 NDK）" {
     Some(version) => assert_eq(version, "27.0.12077973")
     None => fail("expected version from fake source.properties")
   }
-  @fs.rmdir(dir, recursive=true, allow_missing=true) catch {
+  @fs.remove(dir, recursive=true, allow_missing=true) catch {
     _ => ()
   }
 }
@@ -44,10 +44,18 @@ async test "probe_ndk: ANDROID_HOME/ndk 版本目录取最高（伪 SDK）" {
   let sdk = dir + "/sdk"
   let v26 = sdk + "/ndk/26.1.1"
   let v27 = sdk + "/ndk/27.0.1"
-  @fs.mkdir(v26 + "/toolchains/llvm/prebuilt", recursive=true, allow_exist=true) catch {
+  @fs.mkdir(
+    v26 + "/toolchains/llvm/prebuilt",
+    recursive=true,
+    allow_existing=true,
+  ) catch {
     e => fail("mkdir failed: " + e.to_string())
   }
-  @fs.mkdir(v27 + "/toolchains/llvm/prebuilt", recursive=true, allow_exist=true) catch {
+  @fs.mkdir(
+    v27 + "/toolchains/llvm/prebuilt",
+    recursive=true,
+    allow_existing=true,
+  ) catch {
     e => fail("mkdir failed: " + e.to_string())
   }
   @fs.write_text(v27 + "/source.properties", "Pkg.Revision = 27.0.12077973\n") catch {
@@ -71,7 +79,7 @@ async test "probe_ndk: ANDROID_HOME/ndk 版本目录取最高（伪 SDK）" {
     Some(version) => assert_eq(version, "27.0.12077973")
     None => fail("expected version from source.properties")
   }
-  @fs.rmdir(dir, recursive=true, allow_missing=true) catch {
+  @fs.remove(dir, recursive=true, allow_missing=true) catch {
     _ => ()
   }
 }

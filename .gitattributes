@@ -1,0 +1,12 @@
+# EOL 策略：仓库内所有 MoonBit 源码/清单/文档/ABI 文本一律 LF 存储。
+# 目的（AGENTS.md / 技能 §4.2）：Windows 主机 core.autocrlf=true 会让 moon fmt
+# （写 LF）把每个已跟踪文件标记为 modified 而 git diff 为空——误报改动。
+# 本文件强制 LF，配合一次 `git add --renormalize .` 收敛既有工作区状态。
+*.mbt          text eol=lf
+*.mbt.md       text eol=lf
+*.mbti         text eol=lf
+moon.mod       text eol=lf
+moon.pkg       text eol=lf
+*.md           text eol=lf
+*.c            text eol=lf
+*.h            text eol=lf

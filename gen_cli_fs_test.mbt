@@ -13,7 +13,7 @@ async fn temp_dir(prefix : String) -> String raise Failure {
 ///|
 async test "sync_config_file: 写入 / 幂等 / 替换（临时目录受控）" {
   let dir = temp_dir("moon_abi_r4_cli")
-  @fs.mkdir(dir, recursive=true, allow_exist=true) catch {
+  @fs.mkdir(dir, recursive=true, allow_existing=true) catch {
     e => fail("mkdir failed: " + e.to_string())
   }
   let path = dir + "/moon.pkg"
@@ -59,7 +59,7 @@ async test "sync_config_file: 写入 / 幂等 / 替换（临时目录受控）" 
   @fs.remove(path, allow_missing=true) catch {
     _ => ()
   }
-  @fs.rmdir(dir, recursive=true, allow_missing=true) catch {
+  @fs.remove(dir, recursive=true, allow_missing=true) catch {
     _ => ()
   }
 }
@@ -77,7 +77,7 @@ async test "sync_config_file: 父目录缺失 → IoFailure（错误路径不 pa
   }
   assert_true(message.contains("I/O failure"))
   assert_true(message.contains("missing"))
-  @fs.rmdir(dir, recursive=true, allow_missing=true) catch {
+  @fs.remove(dir, recursive=true, allow_missing=true) catch {
     _ => ()
   }
 }

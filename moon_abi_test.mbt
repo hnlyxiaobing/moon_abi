@@ -436,7 +436,7 @@ test "render: 空格路径抛 PathContainsSpace" {
   assert_true(
     e
     is @moon_abi.MoonAbiError::PathContainsSpace(
-      "C:\\Program Files\\android-ndk\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\aarch64-linux-android21-clang"
+      "C:\\Program Files\\android-ndk\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\aarch64-linux-android21-clang",
     ),
   )
 }
