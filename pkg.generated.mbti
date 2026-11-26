@@ -16,6 +16,8 @@ pub fn exit_code_for_error(MoonAbiError) -> Int32
 
 pub fn generate(NdkProfile, Abi) -> LinkNativeConfig raise MoonAbiError
 
+pub fn generate_multi(NdkProfile, Array[Abi]) -> Array[LinkNativeConfig] raise MoonAbiError
+
 pub fn managed_block(LinkNativeConfig) -> String raise MoonAbiError
 
 pub fn merge_action_name(MergeAction) -> String
@@ -27,6 +29,8 @@ pub fn ndk_probe_json(NdkProbeResult) -> String
 pub fn ndk_probe_text(NdkProbeResult) -> String
 
 pub fn parse_gen_args(ArrayView[String]) -> GenCommand raise MoonAbiError
+
+pub fn parse_gen_args_ext(ArrayView[String]) -> GenCommandExt raise MoonAbiError
 
 pub async fn probe_ndk(NdkProbeInputs) -> NdkProbeResult
 
@@ -80,6 +84,13 @@ pub(all) struct GenCommand {
   ndk_version : String?
   output : GenOutput
   path_style : PathStyle
+}
+
+pub(all) struct GenCommandExt {
+  base : GenCommand
+  abis : Array[Abi]
+  extra_link_libs : Array[String]
+  extra_cc_flags : Array[String]
 }
 
 pub(all) enum GenOutput {

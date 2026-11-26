@@ -434,3 +434,213 @@ test "write_config_with: 权限拒绝/磁盘满/读失败注入 → IoFailure" {
   assert_eq(@moon_abi.exit_code_for_error(permission), 1)
   assert_eq(@moon_abi.exit_code_for_error(disk_full), 1)
 }
+
+///|
+/// W4：扩展解析（错误即测试失败）。
+fn parse_ext_or_fail(
+  argv : Array[String],
+) -> @moon_abi.GenCommandExt raise Failure {
+  @moon_abi.parse_gen_args_ext(argv) catch {
+    e => fail("unexpected parse_ext error: " + @moon_abi.error_message(e))
+  }
+}
+
+///|
+/// W4：多 ABI 生成（错误即测试失败）。
+fn generate_multi_or_fail(
+  profile : @moon_abi.NdkProfile,
+  abis : Array[@moon_abi.Abi],
+) -> Array[@moon_abi.LinkNativeConfig] raise Failure {
+  @moon_abi.generate_multi(profile, abis) catch {
+    e => fail("unexpected generate_multi error: " + @moon_abi.error_message(e))
+  }
+}
+
+///|
+/// W4 helper：`Abi` 稳定标签（`Abi` 未 derive `Eq`，比较走标签）。
+fn abi_tag(abi : @moon_abi.Abi) -> String {
+  match abi {
+    @moon_abi.Abi::ArmeabiV7a => "armeabi-v7a"
+    @moon_abi.Abi::Arm64V8a => "arm64-v8a"
+    @moon_abi.Abi::X86 => "x86"
+    @moon_abi.Abi::X86_64 => "x86_64"
+  }
+}
+
+///|
+/// W4 helper：把 `GenCommand` 归一为字段指纹串，供 base 与旧解析器等价性断言。
+fn cmd_fingerprint(cmd : @moon_abi.GenCommand) -> String {
+  let root = match cmd.ndk_root {
+    Some(s) => "@" + s
+    None => "-"
+  }
+  let ver = match cmd.ndk_version {
+    Some(s) => "@" + s
+    None => "-"
+  }
+  let out = match cmd.output {
+    @moon_abi.GenOutput::Stdout => "stdout"
+    @moon_abi.GenOutput::File(p) => "file:" + p
+  }
+  let style = match cmd.path_style {
+    @moon_abi.PathStyle::Auto => "auto"
+    @moon_abi.PathStyle::Windows => "windows"
+    @moon_abi.PathStyle::Unix => "unix"
+  }
+  abi_tag(cmd.abi) +
+  "|" +
+  cmd.api_level.level.to_string() +
+  "|" +
+  root +
+  "|" +
+  ver +
+  "|" +
+  out +
+  "|" +
+  style
+}
+
+///|
+/// T-W4-1：旧参数组合上 `parse_gen_args_ext().base` 与 `parse_gen_args` 逐字段等价。
+test "parse_gen_args_ext: base 与旧 parse_gen_args 等价 (T-W4-1)" {
+  let cases : Array[Array[String]] = [
+    ["--abi", "arm64-v8a", "--api", "21"],
+    [
+      "--abi=armv7", "--api=28", "--ndk-root", "/opt/android-ndk", "--ndk-version",
+      "r27c", "--out", "moon.pkg", "--path-style", "unix",
+    ],
+    ["--abi", "x86_64", "--api", "34", "--out", "p.pkg"],
+  ]
+  for argv in cases {
+    let ext = parse_ext_or_fail(argv)
+    let old = parse_or_fail(argv)
+    assert_eq(cmd_fingerprint(ext.base), cmd_fingerprint(old))
+  }
+}
+
+///|
+/// T-W4-1：多 ABI 去重保序 + extra 选项原序收集。
+/// 注意：`--extra-cc-flag` 的下一个 token 若以 `-` 开头会被 `take_flag_value` 拒绝
+/// （共享旧解析器语义），故 cc flag 用内联 `=` 形式传入。
+test "parse_gen_args_ext: 多 ABI 去重保序 + extra 选项 (T-W4-1)" {
+  let ext = parse_ext_or_fail([
+    "--abi", "x86", "--abi", "arm64", "--abi", "x86", "--abi", "armeabi-v7a", "--api",
+    "21", "--extra-lib", "foo", "--extra-lib", "bar", "--extra-cc-flag=-DNDEBUG",
+  ])
+  assert_eq(ext.abis.length(), 3)
+  assert_eq(abi_tag(ext.abis[0]), "x86")
+  assert_eq(abi_tag(ext.abis[1]), "arm64-v8a")
+  assert_eq(abi_tag(ext.abis[2]), "armeabi-v7a")
+  assert_eq(abi_tag(ext.base.abi), "x86")
+  assert_eq(ext.extra_link_libs.length(), 2)
+  assert_eq(ext.extra_link_libs[0], "foo")
+  assert_eq(ext.extra_link_libs[1], "bar")
+  assert_eq(ext.extra_cc_flags.length(), 1)
+  assert_eq(ext.extra_cc_flags[0], "-DNDEBUG")
+}
+
+///|
+/// T-W4-1：cc flag 内联 `=` 形式原序保留。
+test "parse_gen_args_ext: cc flag 内联 = 形式原序保留 (T-W4-1)" {
+  let ext = parse_ext_or_fail([
+    "--abi", "arm64", "--api", "21", "--extra-cc-flag=-DNDEBUG", "--extra-cc-flag=-O2",
+  ])
+  assert_eq(ext.extra_cc_flags.length(), 2)
+  assert_eq(ext.extra_cc_flags[0], "-DNDEBUG")
+  assert_eq(ext.extra_cc_flags[1], "-O2")
+}
+
+///|
+/// T-W4-1：`--extra-cc-flag` 后跟 `-` 开头的 token 按共享语义抛 CliUsage 退出码 2。
+test "parse_gen_args_ext: cc flag 下一个 token 以 - 开头抛 CliUsage (T-W4-1)" {
+  let err = @test.expect_error(() => {
+    @moon_abi.parse_gen_args_ext([
+      "--abi", "arm64", "--api", "21", "--extra-cc-flag", "-DNDEBUG",
+    ])
+  })
+  match err {
+    @moon_abi.MoonAbiError::CliUsage(_) => ()
+    _ => fail("expected CliUsage (cc flag next token starts with -)")
+  }
+  assert_eq(@moon_abi.exit_code_for_error(err), 2)
+}
+
+///|
+/// T-W4-1：extra 空值抛 CliUsage 退出码 2（内联 `=` 空值也拒绝）。
+test "parse_gen_args_ext: extra 空值抛 CliUsage 退出码 2 (T-W4-1)" {
+  let cases : Array[Array[String]] = [
+    ["--abi", "arm64", "--api", "21", "--extra-lib", ""],
+    ["--abi", "arm64", "--api", "21", "--extra-lib="],
+    ["--abi", "arm64", "--api", "21", "--extra-cc-flag", ""],
+    ["--abi", "arm64", "--api", "21", "--extra-cc-flag="],
+  ]
+  for argv in cases {
+    let err = @test.expect_error(() => @moon_abi.parse_gen_args_ext(argv))
+    match err {
+      @moon_abi.MoonAbiError::CliUsage(_) => ()
+      _ => fail("expected CliUsage for empty extra value")
+    }
+    assert_eq(@moon_abi.exit_code_for_error(err), 2)
+  }
+}
+
+///|
+/// T-W4-3：多 ABI + `--out` 互斥 → CliUsage 退出码 2（单块契约）；去重后单 ABI 仍合法。
+test "parse_gen_args_ext: 多 ABI + --out 抛 CliUsage (T-W4-3)" {
+  let err = @test.expect_error(() => {
+    @moon_abi.parse_gen_args_ext([
+      "--abi", "arm64", "--abi", "x86", "--api", "21", "--out", "moon.pkg",
+    ])
+  })
+  match err {
+    @moon_abi.MoonAbiError::CliUsage(reason) =>
+      assert_true(reason.contains("single managed block contract"))
+    _ => fail("expected CliUsage (multi abi + out)")
+  }
+  assert_eq(@moon_abi.exit_code_for_error(err), 2)
+  let single = parse_ext_or_fail([
+    "--abi", "arm64", "--abi", "arm64", "--api", "21", "--out", "moon.pkg",
+  ])
+  assert_eq(abi_tag(single.base.abi), "arm64-v8a")
+  match single.base.output {
+    @moon_abi.GenOutput::File(p) => assert_eq(p, "moon.pkg")
+    _ => fail("expected file output after dedup to single abi")
+  }
+}
+
+///|
+/// T-W4-2：`generate_multi` 按输入序生成、确定性、extra 落到 flags、空数组错误。
+test "generate_multi: 顺序/确定性/extra/空数组错误 (T-W4-2)" {
+  let profile : @moon_abi.NdkProfile = {
+    ndk_root: "/opt/ndk",
+    ndk_version: "r27",
+    api_level: @moon_abi.ApiLevel::{ level: 21, },
+    extra_link_libs: ["foo"],
+    extra_cc_flags: ["-DNDEBUG"],
+    windows_path_style: false,
+  }
+  let configs = generate_multi_or_fail(profile, [
+    @moon_abi.Abi::Arm64V8a,
+    @moon_abi.Abi::X86_64,
+  ])
+  assert_eq(configs.length(), 2)
+  assert_eq(abi_tag(configs[0].abi), "arm64-v8a")
+  assert_eq(abi_tag(configs[1].abi), "x86_64")
+  assert_true(configs[0].cc.contains("aarch64-linux-android21-clang"))
+  assert_true(configs[1].cc.contains("x86_64-linux-android21-clang"))
+  assert_eq(configs[0].api_level.level, 21)
+  assert_true(configs[0].cc_link_flags.contains("-lfoo"))
+  assert_true(configs[0].cc_flags.contains("-DNDEBUG"))
+  let again = generate_multi_or_fail(profile, [
+    @moon_abi.Abi::Arm64V8a,
+    @moon_abi.Abi::X86_64,
+  ])
+  assert_eq(configs[0].cc, again[0].cc)
+  assert_eq(configs[1].cc, again[1].cc)
+  let err = @test.expect_error(() => @moon_abi.generate_multi(profile, []))
+  match err {
+    @moon_abi.MoonAbiError::CliUsage(_) => ()
+    _ => fail("expected CliUsage for empty abis")
+  }
+  assert_eq(@moon_abi.exit_code_for_error(err), 2)
+}

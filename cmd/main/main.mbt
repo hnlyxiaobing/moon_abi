@@ -32,12 +32,14 @@ fn usage_text() -> String {
     "  " + tool_name + " --help | --version",
     "",
     "gen options:",
-    "  --abi <name>        armeabi-v7a|armv7 | arm64-v8a|arm64 | x86 | x86_64|x64",
+    "  --abi <name>        repeatable, >=1; armeabi-v7a|armv7 | arm64-v8a|arm64 | x86 | x86_64|x64",
     "  --api <level>       Android API level, >= 21",
     "  --ndk-root <path>   NDK root (else probe ANDROID_NDK_HOME/ANDROID_HOME/common paths)",
     "  --ndk-version <ver> NDK version, e.g. r27c or 27.0.12077973 (else read from NDK)",
     "  --out <path>        write/merge into moon.pkg instead of printing to stdout",
     "  --path-style <s>    auto|windows|unix (default auto, inferred from ndk root)",
+    "  --extra-lib <name>  repeatable; append -l<name> to link libraries (log,android are default)",
+    "  --extra-cc-flag <f> repeatable; extra cc flags appended after --target",
     "",
     "Exit codes: 0 success | 2 usage/argument error | 1 runtime/env/IO error",
     "",
@@ -147,17 +149,23 @@ async fn resolve_ndk(
 }
 
 ///|
-/// `gen` 主流程：解析参数 → 补齐 NDK → 生成配置 → 打印或幂等写文件。
+/// `gen` 主流程：解析参数（多 ABI + extra）→ 补齐 NDK → 生成配置 → 打印或幂等写文件。
+///
+/// W4：切换到扩展解析器 `parse_gen_args_ext`；旧参数组合（单 ABI、带 `--out`、路径
+/// 风格覆盖等）的 stdout/stderr/退出码/落盘内容与旧解析器逐字节一致（防火墙 T-W4-4）。
+/// 多 ABI + `--out` 在库解析层已抛 `CliUsage`（退出码 2），此处错误通道不变。
 async fn gen_impl(rest : ArrayView[String]) -> Int32 {
-  let cmd = @moon_abi.parse_gen_args(rest) catch { e => return report_lib(e) }
-  let (ndk_root, ndk_version) = match resolve_ndk(cmd) {
+  let ext = @moon_abi.parse_gen_args_ext(rest) catch {
+    e => return report_lib(e)
+  }
+  let (ndk_root, ndk_version) = match resolve_ndk(ext.base) {
     Ok(pair) => pair
     Err(reason) => {
       eprintln("error: " + reason)
       return 1
     }
   }
-  let windows_path_style = match cmd.path_style {
+  let windows_path_style = match ext.base.path_style {
     @moon_abi.PathStyle::Auto => @moon_abi.windows_path_style_of(ndk_root)
     @moon_abi.PathStyle::Windows => true
     @moon_abi.PathStyle::Unix => false
@@ -165,24 +173,28 @@ async fn gen_impl(rest : ArrayView[String]) -> Int32 {
   let profile = @moon_abi.NdkProfile::{
     ndk_root,
     ndk_version,
-    api_level: cmd.api_level,
-    extra_link_libs: [],
-    extra_cc_flags: [],
+    api_level: ext.base.api_level,
+    extra_link_libs: ext.extra_link_libs,
+    extra_cc_flags: ext.extra_cc_flags,
     windows_path_style,
   }
-  let config = @moon_abi.generate(profile, cmd.abi) catch {
+  let configs = @moon_abi.generate_multi(profile, ext.abis) catch {
     e => return report_lib(e)
   }
-  let block = @moon_abi.managed_block(config) catch {
-    e => return report_lib(e)
+  let blocks : Array[String] = []
+  for c in configs {
+    blocks.push(@moon_abi.managed_block(c) catch { e => return report_lib(e) })
   }
-  match cmd.output {
+  match ext.base.output {
     @moon_abi.GenOutput::Stdout => {
-      println(block.trim_end(chars="\n").to_owned())
+      let trimmed = blocks.map(fn(b) { b.trim_end(chars="\n").to_owned() })
+      // 单 ABI：与旧实现 `println(block.trim_end("\n"))` 逐字节一致；
+      // 多 ABI：按输入序打印，块间单空行分隔（`join("\n\n")`）。
+      println(trimmed.join("\n\n"))
       0
     }
     @moon_abi.GenOutput::File(path) => {
-      let merged = @moon_abi.sync_config_file(path, block) catch {
+      let merged = @moon_abi.sync_config_file(path, blocks[0]) catch {
         e => return report_error(e)
       }
       println(path + ": " + @moon_abi.merge_action_name(merged.action))

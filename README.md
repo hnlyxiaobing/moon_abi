@@ -1,7 +1,7 @@
 # moon_abi · NDK 交叉编译配置生成
 
 > 独立发布单元 ｜ L4 工程交付 ｜ `preferred_target = wasm` ｜ Apache-2.0
-> 状态：`moon test` **76/76** 通过（2026-11-16 本机实测，wasm 与 native 双目标）；本文件是本仓库的**入口**文档，带日期的开发/测试文档与变更簿记见 [docs/](docs/)。
+> 状态：`moon test` **94/94** 通过（2026-11-26 本机实测，wasm 与 native 双目标）；本文件是本仓库的**入口**文档，带日期的开发/测试文档与变更簿记见 [docs/](docs/)。
 > 公开 API 以 `pkg.generated.mbti` 为准（由 `moon info` 生成，禁手工编辑）；加法性变更须登记簿记 + 快照审阅 + 快照门禁。
 
 ## 1. 定位与边界
@@ -13,6 +13,7 @@
 - 四个核心纯函数 `generate` / `render` / `validate` / `clang_name`
 - API level ≥ 21、NDK major ≥ 22 校验；`ConfigRenderer` trait 与文本契约
 - R4 加法性：`gen` / `probe` CLI、`ndk_probe`（异步 FS 探测）、`sync_config_file` 等
+- W4 加法性：`parse_gen_args_ext` / `generate_multi` / `GenCommandExt`（多 ABI、`--extra-lib` / `--extra-cc-flag`）
 - `moon-abi gen` / `moon-abi probe`，退出码 0/1/2
 
 **非目标**
@@ -35,12 +36,14 @@ pub fn clang_name(Abi, ApiLevel) -> String raise MoonAbiError
 pub fn error_message(MoonAbiError) -> String
 pub fn exit_code_for_error(MoonAbiError) -> Int32
 pub fn generate(NdkProfile, Abi) -> LinkNativeConfig raise MoonAbiError
+pub fn generate_multi(NdkProfile, Array[Abi]) -> Array[LinkNativeConfig] raise MoonAbiError
 pub fn managed_block(LinkNativeConfig) -> String raise MoonAbiError
 pub fn merge_action_name(MergeAction) -> String
 pub fn merge_link_config(String, String) -> MergeResult raise MoonAbiError
 pub fn ndk_probe_json(NdkProbeResult) -> String
 pub fn ndk_probe_text(NdkProbeResult) -> String
 pub fn parse_gen_args(ArrayView[String]) -> GenCommand raise MoonAbiError
+pub fn parse_gen_args_ext(ArrayView[String]) -> GenCommandExt raise MoonAbiError
 pub async fn probe_ndk(NdkProbeInputs) -> NdkProbeResult
 pub fn probe_ndk_with(NdkProbeInputs, (String) -> Bool, (String) -> Array[String], (String) -> String?) -> NdkProbeResult
 pub fn render(LinkNativeConfig) -> String raise MoonAbiError
@@ -53,6 +56,7 @@ pub fn MoonAbiError::to_repr(Self) -> @debug.Repr
 pub(all) enum Abi {
 pub(all) struct ApiLevel {
 pub(all) struct GenCommand {
+pub(all) struct GenCommandExt {
 pub(all) enum GenOutput {
 pub(all) struct LinkNativeConfig {
 pub(all) enum MergeAction {
@@ -76,6 +80,7 @@ pub trait ConfigRenderer {
 ## 5. 命令行与验证
 
 - `moon run cmd/main --target native -- gen ...` / `probe ...`。
+- `gen` 选项：`--abi`（可重复、去重保序）、`--api`、`--ndk-root`、`--ndk-version`、`--out`、`--path-style`、`--extra-lib`（可重复）、`--extra-cc-flag`（可重复）。多 ABI 仅打印 stdout（块间单空行），与 `--out` 互斥（退出码 2）。
 - 复验：`moon clean` → `moon check --deny-warn` → `moon build` → `moon test` → `moon fmt --check` → `moon info` 后检查 `pkg.generated.mbti` 无意外 diff。
 - 本仓库为独立 Git 仓库，文档与 CI 均自包含，不依赖工作区其他目录。
 

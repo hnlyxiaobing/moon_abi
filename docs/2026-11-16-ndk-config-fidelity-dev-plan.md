@@ -1,6 +1,6 @@
 # moon_abi NDK 配置忠实性与边界加固开发文档
 
-> 建立：2026-11-16 ｜ 状态：M1（W3）已交付（2026-11-26），M2 起待开发 ｜ 适用仓库：本仓库（独立自包含）
+> 建立：2026-11-16 ｜ 状态：M1（W3）与 M2（W4）均已交付（2026-11-26），M3 起待开发 ｜ 适用仓库：本仓库（独立自包含）
 > 裁决记录：2026-11-16 用户确认采纳推荐项——**W2-A**（NdkNotFound 接线）、**W6-A**（本地 NDK oracle runner）。
 > 配套文档：[2026-11-16-test-system-design.md](2026-11-16-test-system-design.md)（验收测试 ID `T-W*-*` 出自该文档）
 > 本文所有「现状」结论均为 2026-11-16 对本仓库源码的实测核对，非转述历史文档。
@@ -51,7 +51,7 @@
 | B21 | 已实现（含契约局限）：ndk_probe_text 记录行 `NDK|…`/`CAND|…`/`WARN|…`；ndk_probe_json 单行、字段序确定、json_escape 覆盖引号/反斜杠/控制字符（\uXXXX）。局限：路径含 `|` 或换行时文本记录行无转义，解析会歧义（未文档化） | ndk_probe.mbt L603-677；ndk_probe_test.mbt「转义合法」、r4_edge_test.mbt「JSON 单行」 |
 | B22 | 缺口（宿主覆盖）：cc_path 宿主标签仅 windows-x86_64 / linux-x86_64，无 darwin 宿主；macOS 主机无法生成正确 prebuilt 路径 | moon_abi.mbt `cc_path` L255-276 |
 | B23 | 缺口（版本纵深）：无 API 上限/NDK 版本×API 矩阵校验；level=100000 可通过 generate（parse 层仅 cap 100000）；无「level 高于该 NDK 已知最高 API」告警 | moon_abi.mbt `check_api_level`；gen_cli.mbt `parse_api_level_value` |
-| B24 | 实测基线：五门禁全绿（见文档头）；wasm 与 native 双目标各 86/86（M1/W3 后，2026-11-26）；#skip=0；工作树干净 | 2026-11-26 本机实跑 |
+| B24 | 实测基线：五门禁全绿（见文档头）；wasm 与 native 双目标各 94/94（M2/W4 后，2026-11-26）；#skip=0；工作树干净 | 2026-11-26 本机实跑 |
 | B25 | 计数重测：测试声明 68 条 = gen_cli_test 16 + moon_abi_test 21 + wbtest 9 + ndk_probe_test 7 + ndk_probe_fs_test 3 + gen_cli_fs_test 3 + r4_edge_test 9；与 README「68/68」口径一致 | 逐文件 Select-String 重数 + moon test 实跑 |
 | B26 | 漂移（计数）：`git rev-list --count HEAD` = **16**，历史申报口径「15 条有效提交」滞后 +1 | 2026-11-16 git 实测 |
 | B27 | 漂移（API 索引）：README §3 索引缺 4 条 pub 声明：`pub async fn probe_ndk`、`pub async fn sync_config_file`、`pub fn MoonAbiError::to_repr`、`pub trait ConfigRenderer`（索引只抽 `pub fn` 行，漏 async/方法/trait） | README.md L32-65 ↔ pkg.generated.mbti 逐条核对 |
@@ -201,6 +201,8 @@ pub fn generate_multi(NdkProfile, Array[Abi]) -> Array[LinkNativeConfig] raise M
 - extra 选项含空格 token 由 render 既有 PathContainsSpace 拒绝（W3 后含全部空白）。
 **验收**：T-W4-1（新选项解析 + 旧参数 base 等价）、T-W4-2（generate_multi 顺序/确定性/空数组错误）、T-W4-3（--out+多 ABI → 退出码 2）、T-W4-4（旧 CLI 17 场景逐字节防火墙）、T-W4-5（快照 diff 纯加法 + CHANGELOG）。
 
+**验收（实测结果）**：T-W4-1 ✓（base 与旧 `parse_gen_args` 逐字段指纹等价；多 ABI 去重保序；extra 原序；空值→CliUsage 退出码 2）；T-W4-2 ✓（generate_multi 按输入序、确定性、extra 落到 flags、空数组→CliUsage 退出码 2）；T-W4-3 ✓（多 ABI+`--out`→CliUsage 退出码 2 且零落盘；去重后单 ABI+`--out` 仍合法）；T-W4-4 ✓（17 场景逐字节防火墙全符合：version=0、unknown-sub=2、missing-abi=2、r21=1、probe-bad-opt=2、probe-notfound=1、out-first=0、out-idempotent=0、out-malformed=1 且原文件未改写、out-missing-dir=1、bad-abi=2、api20=2、space-path=1、multi-end out=1）+ W4 新场景（multi-stdout=0 两块单空行、multi-out=2）；T-W4-5 ✓（快照 diff 纯加法 +3 声明 +1 struct，CHANGELOG 已登记）。测试增量 +8（86→94；wasm/native 各 94/94，旧用例零改动全绿，#skip=0）。
+
 ### W5 宿主平台与 API 矩阵纵深（P2/M）
 
 **目标**：补 darwin 宿主（B22）与 API 上限 advisory（B23），全部走新函数防火墙。
@@ -241,7 +243,7 @@ pub fn api_level_advisory(NdkProfile) -> Array[String]
 ```text
 M0（第1日）   W1 漂移清理（零风险）＋ W2-A 落地（簿记补齐 + NdkNotFound 接线）
 M1            W3 fail-closed 加固（安全缺口，行为增强例外流程）✅ 已交付 2026-11-26
-M2            W4 CLI extra/多 ABI（高价值低成本，历史「后续」清单）
+M2            W4 CLI extra/多 ABI（高价值低成本，历史「后续」清单）✅ 已交付 2026-11-26
 M3            W5 宿主/API 矩阵纵深（数据表先联网核实再合入）
 M4            W6-A 外部 oracle runner（已裁决 A，M3 后启动）
 ```
@@ -257,13 +259,15 @@ M4            W6-A 外部 oracle runner（已裁决 A，M3 后启动）
 
 ## 8. 完成定义（DoD，逐包勾选）
 
-> M1/W3 已交付（2026-11-26），逐项核验通过：新增 API 无（mbti diff 空）；快照 diff 空；
-> T-W3-1..5 全绿（#skip=0）；五门禁全绿、CLI 退出码矩阵 + 消息文本冻结（冒烟复跑）；
-> 防火墙回归旧用例零改动全绿（wasm/native 各 86/86）；新解析路径已随包一行接入截断扫描；
-> 零新第三方依赖；README/状态行已同步。
+> M1/W3 与 M2/W4 均已交付（2026-11-26），逐项核验通过。
+> M2/W4：新增 API 与 mbti 草案一致（`GenCommandExt`/`parse_gen_args_ext`/`generate_multi`）；
+> 快照 diff 纯加法（+3 声明 +1 struct）；T-W4-1..5 全绿（#skip=0）；五门禁全绿、
+> CLI 退出码矩阵 + 消息文本冻结 + 17 场景逐字节防火墙（冒烟复跑）全符合；
+> 防火墙回归旧用例零改动全绿（wasm/native 各 94/94）；新解析路径 `parse_gen_args_ext`
+> 已随包一行接入截断扫描；零新第三方依赖；README/状态行已同步。
 
-- [x] 新增 API 与 mbti 草案一致（偏差回写本文）—— W3 无新增 API
-- [x] 快照 diff 纯加法（W1/W2/W3 为空 diff），CHANGELOG 已登记
+- [x] 新增 API 与 mbti 草案一致（偏差回写本文）—— W3 无新增 API；W4 三声明一 struct 与草案逐字一致
+- [x] 快照 diff 纯加法（W1/W2/W3 为空 diff；W4 +3 声明 +1 struct），CHANGELOG 已登记
 - [x] T-W*-* 验收全绿；#skip 显式标注原因（#skip=0）
 - [x] 五门禁全绿；CLI 对外契约零意外漂移（退出码矩阵 + 记录行格式 + 消息文本）
 - [x] 防火墙回归：新函数合入后旧 API 在既有语料上输出逐字节不变/旧用例零改动全绿

@@ -5,6 +5,7 @@
 > 现状基线：2026-11-16 实跑 `moon test` 68/68（默认 wasm 目标）、`moon test --target native` 68/68、#skip=0；五门禁全绿、双快照零漂移。
 > M0（W1+W2）交付后 2026-11-16 复跑：双目标各 **76/76**（+8，旧用例零改动）、#skip=0；错误簿记 **11/11** 达成；快照 diff 纯加法（resolve_ndk_values）；T-W2-2 防火墙实测通过（resolve 失败路径 stdout/stderr SHA-256 与基线一致）。
 > M1（W3）交付后 2026-11-26 复跑：双目标各 **86/86**（+5，旧用例零改动）、#skip=0；快照 diff 空；T-W3-1..5 全绿；新解析路径随包一行接入截断扫描。
+> M2（W4）交付后 2026-11-26 复跑：双目标各 **94/94**（+8，旧用例零改动）、#skip=0；快照 diff 纯加法（+3 声明 +1 struct）；T-W4-1..5 全绿；`parse_gen_args_ext` 新解析路径随包一行接入截断扫描；17 场景逐字节防火墙 + 4 个 W4 新场景实跑符合。
 
 ## 1. 第一性原理：本库的正确性是什么
 
@@ -97,19 +98,19 @@ R runner：样本路径+登记哈希 → 哈希不符拒绝执行 → 规范化�
 | ID | 能力/场景 | L0 | L1 | L2 | L3 | L4 | 现状（P4） | 缺口→W# |
 |---|---|---|---|---|---|---|---|---|
 | F1 | ABI/triple/wrapper 命名 | ✓ | ✗ | ✓ | ✗ | ✓ | 4 ABI×多 level golden（B2） | 位翻转口径→W3 随包 |
-| F2 | generate 配置值 | ✓ | ✗ | ✓ | ✗ | ✓ | 逐字段+extra 顺序（B4） | 多 ABI→W4；宿主→W5 |
+| F2 | generate 配置值 | ✓ | ✗ | ✓ | ✗ | ✓ | 逐字段+extra 顺序（B4） | 多 ABI 已落地(W4)；宿主→W5 |
 | F3 | render 确定性/转义 | ✓ | ◐ | ✓ | ✗ | ✓ | golden 6 组+双次渲染（B5） | 空白变体已落地(W3) |
 | F4 | validate 报告 | ✓ | ✗ | ✗ | ✗ | ✗ | 三例（B7） | 上限 advisory→W5；空白已落地(W3) |
-| F5 | CLI 解析/退出码 | ✓ | ◐ | ✗ | ✗ | ◐ | 14+5 负例、17 场景手工实跑（B11/B13） | 脚本固化→W4；extra→W4 |
+| F5 | CLI 解析/退出码 | ✓ | ◐ | ✗ | ✗ | ◐ | 14+5 负例、17 场景手工实跑（B11/B13） | extra/多 ABI 已落地(W4)；脚本固化仍待 W6 |
 | F6 | 受管块合并 | ✓ | ◐ | ✓ | ✗ | ✓ | 三态+CRLF+畸形（B14） | 多 END 已落地(W3)；变异全集→W3 |
 | F7 | 写配置双通道 | ✓ | ✗ | ✗ | ✗ | ✓ | 注入三失败+FS 三例（B16/B17） | 双通道自动差分→W3 随包 |
 | F8 | NDK 探测 | ✓ | ◐ | ◐ | ✗ | ✓ | 纯核心 7+FS 3+边界 4（B18/B20） | 键名变体已落地(W3)；排序律→W3 随包 |
 | F9 | 错误模型 | ✓ | ✗ | ✗ | ✗ | ✓ | 显式簿记 11/11（W2 已交付，原 B9/B10 缺口已闭） | — |
 | F10 | 路径风格推断 | ✓ | ✗ | ✗ | ✗ | ✓ | 盘符/反斜杠/空串（B12 相关） | 混合分隔符样本→W5 |
-| S1 | 预期场景端到端（gen 打印/写盘/幂等、probe 文本/JSON） | | | | | ◐ | 17 场景手工基线（B13） | 脚本固化→W4 |
-| S2 | 安全拒绝场景（空格/畸形/越界先于写盘整体拒绝） | ✓ | | | | ✓ | 实跑 malformed 时原文件未被改写（B13/B14） | 多 END/空白已落地(W3)；越界→W3 |
+| S1 | 预期场景端到端（gen 打印/写盘/幂等、probe 文本/JSON） | | | | | ◐ | 17 场景手工基线（B13）；W4 新增多 ABI stdout/多 ABI+--out 两场景 | 脚本固化仍待 W6 |
+| S2 | 安全拒绝场景（空格/畸形/越界先于写盘整体拒绝） | ✓ | | | | ✓ | 实跑 malformed 时原文件未被改写（B13/B14） | 多 END/空白已落地(W3)；越界→W3；多 ABI+--out 已落地(W4) |
 | C1 | 输入安全（畸形不 panic/内存有界） | ◐ | ◐ | | | | 错误注入覆盖+W3 截断扫描（render 空白 token 全前缀） | 变异体→W3/W4 随包 |
-| C2 | 防火墙（新函数不改旧语义） | ◐ | ✗ | | | ◐ | T-W2-2 已过（W2 失败路径逐字节差分）；其余未固化 | P7/T-W4-4/T-W5-2→W4/W5 |
+| C2 | 防火墙（新函数不改旧语义） | ◐ | ✗ | | | ◐ | T-W2-2 已过（W2 失败路径逐字节差分）；T-W4-4 17 场景逐字节已过（W4）；其余未固化 | P7/T-W5-2→W5 |
 | C3 | 许可红线（F-D 零入库） | ✓ | | | | | 临时目录自产+用后即焚（B36） | R runner 哈希门禁→W6 |
 | C4 | 契约稳定（快照/记录行/退出码） | ✓ | | ✓ | | ✓ | CI 快照门禁+实跑矩阵（B24） | 簿记/引用扫描门禁→W1/W2 |
 
@@ -145,9 +146,9 @@ R runner：样本路径+登记哈希 → 哈希不符拒绝执行 → 规范化�
 
 | 用例 | 位置 | 原因 |
 |---|---|---|
-| （无） | — | 当前基线零 #skip（2026-11-26 M1/W3 后实测：源码 Grep #skip=0，moon test 86/86） |
+| （无） | — | 当前基线零 #skip（2026-11-26 M2/W4 后实测：源码 Grep #skip=0，moon test 94/94） |
 
-计数口径：86 条声明 − 0 条 #skip = 86 执行（2026-11-26 M1/W3 后，wasm 与 native 双目标各 86/86；M0 后基线 76；M0 前基线 68）；`--include-skipped` 结果单独报告。W6 若落地，R 层占位用例以 #skip 入库并在此表单列。
+计数口径：94 条声明 − 0 条 #skip = 94 执行（2026-11-26 M2/W4 后，wasm 与 native 双目标各 94/94；M1 后 86；M0 后基线 76；M0 前基线 68）；`--include-skipped` 结果单独报告。W6 若落地，R 层占位用例以 #skip 入库并在此表单列。
 
 ### 6.5 验收 ID 双向追溯表
 
@@ -165,11 +166,11 @@ R runner：样本路径+登记哈希 → 哈希不符拒绝执行 → 规范化�
 | T-W3-3 Pkg.RevisionFoo 不误命中 | W3（已交付 ✓） | F8 | A2/L0 |
 | T-W3-4 防火墙回归：旧 68 用例零改动全绿 | W3（已交付 ✓） | C2 | A5/L5 |
 | T-W3-5 截断/变异扫描无 panic | W3（已交付 ✓） | C1 | A4/L1 |
-| T-W4-1 parse_gen_args_ext 新选项+旧参数 base 等价 | W4 | F5 | A1/A5/L0 |
-| T-W4-2 generate_multi 顺序/确定性/空数组错误 | W4 | F2 | A1/L0+L1 |
-| T-W4-3 --out+多 ABI → CliUsage 退出码 2 | W4 | F5、S2 | A5/L4 |
-| T-W4-4 旧 CLI 17 场景逐字节防火墙 | W4 | C2、S1 | A5/L4 |
-| T-W4-5 快照 diff 纯加法+CHANGELOG | W4 | C4 | A5/L5 |
+| T-W4-1 parse_gen_args_ext 新选项+旧参数 base 等价 | W4（已交付 ✓） | F5 | A1/A5/L0 |
+| T-W4-2 generate_multi 顺序/确定性/空数组错误 | W4（已交付 ✓） | F2 | A1/L0+L1 |
+| T-W4-3 --out+多 ABI → CliUsage 退出码 2 | W4（已交付 ✓） | F5、S2 | A5/L4 |
+| T-W4-4 旧 CLI 17 场景逐字节防火墙 | W4（已交付 ✓） | C2、S1 | A5/L4 |
+| T-W4-5 快照 diff 纯加法+CHANGELOG | W4（已交付 ✓） | C4 | A5/L5 |
 | T-W5-1 三宿主 golden 路径/标签 | W5 | F2、F10 | A1/L2 |
 | T-W5-2 旧 generate 输出逐字节不变 | W5 | C2 | A5/L5 |
 | T-W5-3 api_level_advisory 边界三态 | W5 | F4 | A2/L0 |
@@ -180,27 +181,30 @@ R runner：样本路径+登记哈希 → 哈希不符拒绝执行 → 规范化�
 
 ## 7. L4 CLI 场景 E2E
 
-退出码矩阵基线（2026-11-16 native 实跑，17 场景；W4 固化为仓库内脚本）：
+退出码矩阵基线（2026-11-16 native 实跑，17 场景；W4 已新增 2 场景并实跑通过，固化为仓库内脚本仍待 W6）：
 
-| 场景 | 命令序列 | 断言要点（退出码+输出+落盘） |
-|---|---|---|
-| 无参数 | `moon-abi` | 2；usage 首行 `moon-abi 0.1.0` |
-| 帮助/版本 | `--help` / `--version` | 0；版本串 `moon-abi 0.1.0` |
-| 未知子命令 | `bogus` | 2；stderr `unknown subcommand` |
-| 非法 ABI | `gen --abi mips --api 21` | 2；`unsupported ABI: mips` |
-| API 越界 | `gen --abi arm64 --api 20` | 2；`below minimum 21` |
-| 缺必选项 | `gen --api 21` | 2；`missing required option --abi` |
-| 只读打印 | `gen --abi arm64 --api 21 --ndk-root /opt/ndk --ndk-version r27` | 0；stdout=受管块（trim 尾换行）；零落盘 |
-| 空格路径 | 同上 `--ndk-root "C:\Program Files\ndk"` | 1；`path contains a space`；**写盘前整体拒绝** |
-| 旧 NDK | 同上 `--ndk-version r21` | 1；`expected NDK r22+, got r21` |
-| probe 非法选项 | `probe --bogus` | 2 |
-| probe 未找到 | `probe` / `probe --json`（无 NDK 环境） | 1；`NDK|found=false` / JSON `"found":false`；记录行字段序冻结 |
-| 首次写盘 | `gen … --out <tmp>/moon.pkg` | 0；`<path>: appended`；落盘=块 |
-| 幂等写盘 | 重复上条 | 0；`<path>: unchanged`；落盘哈希不变 |
-| 畸形既有文件 | `--out` 指向含孤儿 BEGIN 的文件 | 1；`malformed managed config`；**原文件逐字节未被改写** |
-| 父目录缺失 | `--out <tmp>/nodir/moon.pkg` | 1；`I/O failure` |
-| （W4 新增）多 ABI stdout | `gen --abi arm64 --abi x86_64 …` | 0；两个受管块按序、块间单空行 |
-| （W4 新增）多 ABI+--out | 同上 `--out` | 2；CliUsage 明示单块契约；零落盘 |
+| 场景 | 命令序列 | 断言要点（退出码+输出+落盘） | 状态 |
+|---|---|---|---|
+| 无参数 | `moon-abi` | 2；usage 首行 `moon-abi 0.1.0` | ✓ |
+| 帮助/版本 | `--help` / `--version` | 0；版本串 `moon-abi 0.1.0` | ✓ |
+| 未知子命令 | `bogus` | 2；stderr `unknown subcommand` | ✓ |
+| 非法 ABI | `gen --abi mips --api 21` | 2；`unsupported ABI: mips` | ✓ |
+| API 越界 | `gen --abi arm64 --api 20` | 2；`below minimum 21` | ✓ |
+| 缺必选项 | `gen --api 21` | 2；`missing required option --abi` | ✓ |
+| 只读打印 | `gen --abi arm64 --api 21 --ndk-root /opt/ndk --ndk-version r27` | 0；stdout=受管块（trim 尾换行）；零落盘 | ✓ |
+| 空格路径 | 同上 `--ndk-root "C:\Program Files\ndk"` | 1；`path contains a space`；**写盘前整体拒绝** | ✓ |
+| 旧 NDK | 同上 `--ndk-version r21` | 1；`expected NDK r22+, got r21` | ✓ |
+| probe 非法选项 | `probe --bogus` | 2 | ✓ |
+| probe 未找到 | `probe` / `probe --json`（无 NDK 环境） | 1；`NDK|found=false` / JSON `"found":false`；记录行字段序冻结 | ✓ |
+| 首次写盘 | `gen … --out <tmp>/moon.pkg` | 0；`<path>: appended`；落盘=块 | ✓ |
+| 幂等写盘 | 重复上条 | 0；`<path>: unchanged`；落盘哈希不变 | ✓ |
+| 畸形既有文件 | `--out` 指向含孤儿 BEGIN 的文件 | 1；`malformed managed config`；**原文件逐字节未被改写** | ✓ |
+| 父目录缺失 | `--out <tmp>/nodir/moon.pkg` | 1；`I/O failure` | ✓ |
+| 多 END 既有文件（W3） | `--out` 指向单 begin+多 end 的文件 | 1；`malformed managed config`；原文件逐字节未被改写 | ✓ |
+| （W4 新增）多 ABI stdout | `gen --abi arm64 --abi x86_64 …` | 0；两个受管块按序、块间单空行 | ✓ |
+| （W4 新增）多 ABI+--out | 同上 `--out` | 2；CliUsage 明示单块契约；零落盘 | ✓ |
+| （W4 新增）extra 落到 flags | `gen … --extra-lib foo --extra-cc-flag=-DNDEBUG` | 0；cc-flags 尾含 `-DNDEBUG`、cc-link-flags 尾含 `-lfoo` | ✓ |
+| （W4 新增）extra 空值 | `gen … --extra-lib ""` / `--extra-lib=` | 2；`CliUsage` 空值消息 | ✓ |
 
 记录行/JSON 契约冻结口径：`NDK|found=..|selected=..|version=..`、`CAND|source=..|exists=..|usable=..|version=..|path=..|note=..`、`WARN|..`；JSON 单行字段序 `tool/found/selected/version/candidates/warnings`；`<path>: appended|replaced|unchanged`。变更即破坏。已知局限（W1 文档化）：路径含 `|`/换行时文本记录行歧义，JSON 通道无此问题。退出码矩阵 0/1/2 逐例断言；78 仅用于 R 层 SKIPPED 口径，不出现在 CLI 契约。
 
@@ -235,9 +239,9 @@ moon build --target native  # CLI E2E 前置
 
 落地验收（逐层勾选）：
 
-- [x] L0：86 条全绿（M1/W3 后，原 76/68 基线零改动）；簿记 11/11 已达成（W2）；W4/W5 新函数各附样例（待落地）
-- [◐] L1：P1-P8 变形律自动化；截断扫描（W3 新解析路径已一行接入：render 空白 token/merge 多 END/键名变体）；≥1000 变异体/轮仍待 W3/W4 随包补齐
-- [ ] L2：render golden 维持；probe 记录行/merge 三态 golden 扩充（W3/W4）
+- [x] L0：94 条全绿（M2/W4 后，原 86/94 基线零改动经 W3→W4 递进）；簿记 11/11 已达成（W2）；W4 新函数（parse_gen_args_ext/generate_multi/GenCommandExt）已附样例（W5 待落地）
+- [◐] L1：P1-P8 变形律自动化；截断扫描（W3 新解析路径已一行接入：render 空白 token/merge 多 END/键名变体；W4 parse_gen_args_ext 参数序列已一行接入）；≥1000 变异体/轮仍待 W5 随包补齐
+- [ ] L2：render golden 维持；probe 记录行/merge 三态 golden 扩充（W5）
 - [ ] L3/R：未实现（W6 已裁决 A，M4 落地；不得预写通过）
-- [ ] L4：17 场景基线脚本固化（W4）；新增多 ABI 两场景
+- [ ] L4：17 场景基线脚本固化（脚本层 W6；W4 已实跑全部 17+4 场景并登记）；新增多 ABI 两场景已实跑通过
 - [ ] L5：快照门禁已在 CI；簿记/变异自检/引用扫描/双目标等价随 W1/W2 落地

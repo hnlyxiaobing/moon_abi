@@ -149,3 +149,23 @@ test "truncation scan: parse_gen_args 参数序列全前缀无 panic" {
   ]
   run_truncation_scan_args(args, argv => ignore(parse_gen_args(argv)))
 }
+
+///|
+/// 截断扫描：`parse_gen_args_ext` 参数序列全前缀无 panic（W4 新解析路径）。
+/// 覆盖多 ABI、extra 选项、内联 `=` 与缺值边界；含空白/空值种子在截断前缀
+/// 上也只允许「合法输出或 MoonAbiError」两通道，绝不 panic。
+test "truncation scan: parse_gen_args_ext 参数序列全前缀无 panic (W4)" {
+  let seeds : Array[Array[String]] = [
+    [
+      "--abi", "arm64-v8a", "--api", "21", "--extra-lib", "foo", "--extra-cc-flag=-DNDEBUG",
+    ],
+    ["--abi", "arm64", "--abi", "x86_64", "--api", "21"],
+    [
+      "--abi=arm64-v8a", "--api=21", "--extra-lib=foo", "--extra-cc-flag=-DNDEBUG",
+    ],
+    ["--abi", "arm64", "--api", "21", "--out", "moon.pkg"],
+  ]
+  for seed in seeds {
+    run_truncation_scan_args(seed, argv => ignore(parse_gen_args_ext(argv)))
+  }
+}

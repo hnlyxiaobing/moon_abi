@@ -4,6 +4,26 @@
 > 快照由 `moon info` 生成（禁手编）；#skip/SKIPPED 永不计入通过。
 > 配套设计文档：[2026-11-16-ndk-config-fidelity-dev-plan.md](2026-11-16-ndk-config-fidelity-dev-plan.md)。
 
+## 2026-11-26 · M2（W4 CLI extra 选项 + 多 ABI）
+
+> 新增 CLI `gen` 扩展：`--abi` 可重复（≥1，去重保序）、新增 `--extra-lib`/`--extra-cc-flag`（均可重复、原序、空值拒绝）。
+> 纯加法 API：`GenCommandExt` + `parse_gen_args_ext` + `generate_multi`；旧 `parse_gen_args`/`generate` 一行不动。
+> cmd/main 切换到扩展解析器，旧参数组合（单 ABI、`--out`、路径风格覆盖等）的 stdout/stderr/退出码/落盘内容逐字节不变（防火墙 T-W4-4）。
+
+- 新增 pub 声明：`GenCommandExt`（struct，含 `base`/`abis`/`extra_link_libs`/`extra_cc_flags`）、`parse_gen_args_ext(ArrayView[String]) -> GenCommandExt`、`generate_multi(NdkProfile, Array[Abi]) -> Array[LinkNativeConfig]`。快照 diff：纯加法 +3 声明 +1 struct（pkg.generated.mbti）。
+- 行为/契约（相对旧 CLI）：
+  - 多 ABI（去重后 ≥2）stdout 打印按输入序两个受管块、块间单空行分隔；`generate_multi` 按输入序逐 ABI 生成同一 profile。
+  - 多 ABI + `--out` 互斥 → `CliUsage`（退出码 2，消息明示「single managed block contract」，零落盘）；去重后单 ABI + `--out` 仍合法。
+  - `--extra-lib <name>` 追加 `-l<name>` 到 cc-link-flags；`--extra-cc-flag <f>` 追加到 cc-flags 末尾。值以 `-` 开头需用内联 `=` 形式（共享 `take_flag_value` 语义，独立 token 以 `-` 开头抛 `CliUsage`）。
+  - extra 空值（独立参数 `""` 或内联 `=` 空）→ `CliUsage` 退出码 2；`generate_multi` 空数组 → `CliUsage` 退出码 2。
+- 测试增量：+8（86→94；wasm 与 native 双目标各 94/94，旧用例零改动全绿，#skip=0）。
+  - gen_cli_test.mbt +7：T-W4-1 base 与旧 `parse_gen_args` 逐字段等价（指纹串）、多 ABI 去重保序 + extra 原序、cc flag 内联 `=` 原序保留、cc flag 独立 token 以 `-` 开头抛 `CliUsage`、extra 空值抛 `CliUsage` 退出码 2、T-W4-3 多 ABI+`--out` 互斥抛 `CliUsage`、T-W4-2 `generate_multi` 顺序/确定性/extra 落到 flags/空数组错误。
+  - truncation_scan_wbtest.mbt +1：`parse_gen_args_ext` 参数序列全前缀无 panic 扫描（含多 ABI/extra/内联 `=` 种子），新解析路径一行接入扫描。
+- 实现要点：`gen_cli_ext.mbt` 复用旧解析器同一组辅助（`split_flag`/`take_flag_value`/`abi_from_name`/`parse_api_level_value`/`path_style_from_name`/`check_api_level`）；`base.abi = abis[0]` 使单 ABI 语义与旧解析器逐字一致；`abi_index` 供去重保序（不新增 `Abi` 的 `Eq` derive 以免污染快照）。
+- 门禁状态：`moon check --deny-warn` / `moon build` / `moon test`（wasm 与 native 各 94/94） / `moon fmt --check` / `moon info` 快照 diff 纯加法 全绿；CLI 冒烟复跑：17 场景防火墙逐字节符合（version=0、unknown-sub=2、missing-abi=2、r21=1、probe-bad-opt=2、probe-notfound=1、out-first=0、out-idempotent=0、out-malformed=1 且原文件未改写、out-missing-dir=1、bad-abi=2、api20=2、space-path=1、multi-end out=1）+ W4 新场景（multi-stdout=0 两块单空行、multi-out=2、extra 落到 flags）。
+- 验收：T-W4-1 ✓、T-W4-2 ✓、T-W4-3 ✓、T-W4-4 ✓（17 场景逐字节防火墙）、T-W4-5 ✓（快照 diff 纯加法 + CHANGELOG 登记）。
+- 待落地（仍按原排期）：W5 宿主/API 矩阵（M3，数据表先联网核实）、W6-A 外部 oracle runner（M4）。
+
 ## 2026-11-26 · M1（W3 fail-closed 输入加固）
 
 > 关闭 B6 / B15 / B19 三处静默放行：以前静默放行的损坏/不安全输入现在拒绝。
