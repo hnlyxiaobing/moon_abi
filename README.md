@@ -1,7 +1,7 @@
 # moon_abi · NDK 交叉编译配置生成
 
 > 独立发布单元 ｜ L4 工程交付 ｜ `preferred_target = wasm` ｜ Apache-2.0
-> 状态：`moon test` **94/94** 通过（2026-11-26 本机实测，wasm 与 native 双目标）；本文件是本仓库的**入口**文档，带日期的开发/测试文档与变更簿记见 [docs/](docs/)。
+> 状态：`moon test` **99/99** 通过（2026-11-26 本机实测，wasm 与 native 双目标）；本文件是本仓库的**入口**文档，带日期的开发/测试文档与变更簿记见 [docs/](docs/)。
 > 公开 API 以 `pkg.generated.mbti` 为准（由 `moon info` 生成，禁手工编辑）；加法性变更须登记簿记 + 快照审阅 + 快照门禁。
 
 ## 1. 定位与边界
@@ -14,6 +14,7 @@
 - API level ≥ 21、NDK major ≥ 22 校验；`ConfigRenderer` trait 与文本契约
 - R4 加法性：`gen` / `probe` CLI、`ndk_probe`（异步 FS 探测）、`sync_config_file` 等
 - W4 加法性：`parse_gen_args_ext` / `generate_multi` / `GenCommandExt`（多 ABI、`--extra-lib` / `--extra-cc-flag`）
+- W5 加法性：`NdkHost` / `host_tag` / `generate_with_host`（三宿主含 darwin）/ `api_level_advisory`
 - `moon-abi gen` / `moon-abi probe`，退出码 0/1/2
 
 **非目标**
@@ -32,11 +33,14 @@
 
 ```text
 pub fn abi_from_name(String) -> Abi raise MoonAbiError
+pub fn api_level_advisory(NdkProfile) -> Array[String]
 pub fn clang_name(Abi, ApiLevel) -> String raise MoonAbiError
 pub fn error_message(MoonAbiError) -> String
 pub fn exit_code_for_error(MoonAbiError) -> Int32
 pub fn generate(NdkProfile, Abi) -> LinkNativeConfig raise MoonAbiError
 pub fn generate_multi(NdkProfile, Array[Abi]) -> Array[LinkNativeConfig] raise MoonAbiError
+pub fn generate_with_host(NdkProfile, Abi, NdkHost) -> LinkNativeConfig raise MoonAbiError
+pub fn host_tag(NdkHost) -> String
 pub fn managed_block(LinkNativeConfig) -> String raise MoonAbiError
 pub fn merge_action_name(MergeAction) -> String
 pub fn merge_link_config(String, String) -> MergeResult raise MoonAbiError
@@ -62,6 +66,7 @@ pub(all) struct LinkNativeConfig {
 pub(all) enum MergeAction {
 pub(all) struct MergeResult {
 pub(all) struct NdkCandidate {
+pub(all) enum NdkHost {
 pub(all) struct NdkProbeInputs {
 pub(all) struct NdkProbeResult {
 pub(all) struct NdkProfile {

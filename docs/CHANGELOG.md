@@ -4,6 +4,26 @@
 > 快照由 `moon info` 生成（禁手编）；#skip/SKIPPED 永不计入通过。
 > 配套设计文档：[2026-11-16-ndk-config-fidelity-dev-plan.md](2026-11-16-ndk-config-fidelity-dev-plan.md)。
 
+## 2026-11-26 · M3（W5 宿主平台与 API 矩阵纵深）
+
+> 新增三宿主 clang 路径（含 darwin）与 API 上限 advisory；纯加法 API，
+> 旧 `generate`/`validate`/`cc_path` 一行不动、输出逐字节不变（防火墙 T-W5-2）。
+
+- 新增 pub 声明：`NdkHost`（enum：`WindowsX86_64` / `LinuxX86_64` / `DarwinX86_64`）、`host_tag(NdkHost) -> String`、`generate_with_host(NdkProfile, Abi, NdkHost) -> LinkNativeConfig`、`api_level_advisory(NdkProfile) -> Array[String]`。快照 diff：纯加法 +4 声明（12 行增、0 删；`pkg.generated.mbti`）。
+- **易变事实核实（2026-11-26 联网）**：
+  - 宿主标签：`toolchains/llvm/prebuilt/<host>` 在 NDK r22+ 为 `windows-x86_64` / `linux-x86_64` / `darwin-x86_64`（多个 NDK 目录样本与 r27c 实测记录一致）。
+  - NDK major → 已知最高 API：r22→30、r23→31、r24→32、r25→33、r26→34、r27→35（Android 各版本 NDK 修订记录与 r27c「api 35 默认」记录一致）。来源：Android NDK 修订历史（developer.android.com/ndk/downloads/revision_history）及 r23/r25/r26/r27 变更记录；结论登记本文件，若后续核实不符仅调整新函数数据表（旧 API 不受影响）。
+- 行为/契约（纯加法，旧 CLI 零漂移）：
+  - `generate_with_host`：路径分隔符与 `prebuilt` 宿主标签均由 `NdkHost` 决定，**忽略** `profile.windows_path_style`（新函数文档明示）；其余注入（校验顺序、`--target`、extra flag/lib、`stub_cc`）与 `generate` 一致；Windows/Linux 两宿主输出与旧 `generate` 逐字节相同。
+  - `api_level_advisory`：level 高于该 NDK major 已知最高 API → 返回一条警告串（含 level / 上限 / major）；版本不可解析或 major 不在表内 → 空数组（不猜测、不阻断）。
+- 测试增量：+5（94→99；wasm 与 native 双目标各 99/99，旧用例零改动全绿，#skip=0）。
+  - ndk_host_test.mbt +4：T-W5-1 三宿主标签 + 三宿主 golden cc 路径；T-W5-2 win/linux 与旧 `generate` 逐字节一致；T-W5-3 advisory 边界三态（不可解析/未知 major 零警告、恰等于上限零警告、超上限告警、全版本号写法可解析）。
+  - truncation_scan_wbtest.mbt +1：`api_level_advisory` 对 `ndk_version` 全前缀无 panic 扫描（W5 新解析路径一行接入）。
+- 实现要点：新文件 `ndk_host.mbt`；`cc_path_with_host`（私有）与旧 `cc_path` 同构但宿主由参数决定，不触碰旧 `cc_path`；`known_max_api` 内置保守数据表；`api_level_advisory` 复用私有 `ndk_major`。
+- 门禁状态：`moon check --deny-warn` / `moon build` / `moon test`（wasm 与 native 各 99/99） / `moon fmt --check` / `moon info` 快照 diff 纯加法 全绿；CLI 冒烟复跑（help=0、gen-ok=0、no-args=2、bad-abi=2、api20=2、space-path=1、multi-out=2、multi-stdout=0）零漂移。
+- 验收：T-W5-1 ✓、T-W5-2 ✓、T-W5-3 ✓、T-W5-4 ✓（快照 diff 纯加法 + CHANGELOG 登记）。
+- 待落地（仍按原排期）：W6-A 外部 oracle runner（M4，脚本层零 API）。
+
 ## 2026-11-26 · M2（W4 CLI extra 选项 + 多 ABI）
 
 > 新增 CLI `gen` 扩展：`--abi` 可重复（≥1，去重保序）、新增 `--extra-lib`/`--extra-cc-flag`（均可重复、原序、空值拒绝）。

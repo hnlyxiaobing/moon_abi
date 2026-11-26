@@ -1,6 +1,6 @@
 # moon_abi NDK 配置忠实性与边界加固开发文档
 
-> 建立：2026-11-16 ｜ 状态：M1（W3）与 M2（W4）均已交付（2026-11-26），M3 起待开发 ｜ 适用仓库：本仓库（独立自包含）
+> 建立：2026-11-16 ｜ 状态：M1（W3）、M2（W4）、M3（W5）均已交付（2026-11-26），M4 起待开发 ｜ 适用仓库：本仓库（独立自包含）
 > 裁决记录：2026-11-16 用户确认采纳推荐项——**W2-A**（NdkNotFound 接线）、**W6-A**（本地 NDK oracle runner）。
 > 配套文档：[2026-11-16-test-system-design.md](2026-11-16-test-system-design.md)（验收测试 ID `T-W*-*` 出自该文档）
 > 本文所有「现状」结论均为 2026-11-16 对本仓库源码的实测核对，非转述历史文档。
@@ -51,7 +51,7 @@
 | B21 | 已实现（含契约局限）：ndk_probe_text 记录行 `NDK|…`/`CAND|…`/`WARN|…`；ndk_probe_json 单行、字段序确定、json_escape 覆盖引号/反斜杠/控制字符（\uXXXX）。局限：路径含 `|` 或换行时文本记录行无转义，解析会歧义（未文档化） | ndk_probe.mbt L603-677；ndk_probe_test.mbt「转义合法」、r4_edge_test.mbt「JSON 单行」 |
 | B22 | 缺口（宿主覆盖）：cc_path 宿主标签仅 windows-x86_64 / linux-x86_64，无 darwin 宿主；macOS 主机无法生成正确 prebuilt 路径 | moon_abi.mbt `cc_path` L255-276 |
 | B23 | 缺口（版本纵深）：无 API 上限/NDK 版本×API 矩阵校验；level=100000 可通过 generate（parse 层仅 cap 100000）；无「level 高于该 NDK 已知最高 API」告警 | moon_abi.mbt `check_api_level`；gen_cli.mbt `parse_api_level_value` |
-| B24 | 实测基线：五门禁全绿（见文档头）；wasm 与 native 双目标各 94/94（M2/W4 后，2026-11-26）；#skip=0；工作树干净 | 2026-11-26 本机实跑 |
+| B24 | 实测基线：五门禁全绿（见文档头）；wasm 与 native 双目标各 99/99（M3/W5 后，2026-11-26）；#skip=0；工作树干净 | 2026-11-26 本机实跑 |
 | B25 | 计数重测：测试声明 68 条 = gen_cli_test 16 + moon_abi_test 21 + wbtest 9 + ndk_probe_test 7 + ndk_probe_fs_test 3 + gen_cli_fs_test 3 + r4_edge_test 9；与 README「68/68」口径一致 | 逐文件 Select-String 重数 + moon test 实跑 |
 | B26 | 漂移（计数）：`git rev-list --count HEAD` = **16**，历史申报口径「15 条有效提交」滞后 +1 | 2026-11-16 git 实测 |
 | B27 | 漂移（API 索引）：README §3 索引缺 4 条 pub 声明：`pub async fn probe_ndk`、`pub async fn sync_config_file`、`pub fn MoonAbiError::to_repr`、`pub trait ConfigRenderer`（索引只抽 `pub fn` 行，漏 async/方法/trait） | README.md L32-65 ↔ pkg.generated.mbti 逐条核对 |
@@ -226,6 +226,8 @@ pub fn api_level_advisory(NdkProfile) -> Array[String]
 - `api_level_advisory`：内置「NDK major → 已知最高 API」保守数据表（r22→30、r23→31、r24→32、r25→33、r26→34、r27→35；各值 [需联网核实]，合入前逐项核对官方文档）；level 高于表值→警告串；版本不可解析或 major 不在表内→空数组（不猜测）；纯函数、确定性、不阻断。
 **验收**：T-W5-1（三宿主 golden 路径/标签）、T-W5-2（旧 generate 输出逐字节不变）、T-W5-3（advisory 边界：未知版本零警告/超上限告警/恰等于上限零警告）、T-W5-4（快照 diff 纯加法 + CHANGELOG）。
 
+**验收（实测结果）**：T-W5-1 ✓（三宿主标签与 golden cc 路径逐字断言）；T-W5-2 ✓（win/linux 与旧 `generate` cc/flags/link-flags 逐字节一致）；T-W5-3 ✓（banana/r28 零警告、r27@35 零警告、r27@36 告警、r22@30 零警告/r22@31 告警、27.0.12077973@36 告警）；T-W5-4 ✓（快照 diff 纯加法 +4 声明，CHANGELOG 已登记；darwin 标签与 NDK major→API 表 2026-11-26 联网核实结论见 CHANGELOG）。测试增量 +5（94→99；wasm/native 各 99/99，旧用例零改动全绿，#skip=0）。
+
 ### W6 外部 oracle 本地 runner（P2/L，已裁决 A）
 
 **目标**：在许可与边界约束内回答「生成的配置真的能被 moon + NDK 消费吗」（G6/E3 的模块侧只读差分）。
@@ -244,7 +246,7 @@ pub fn api_level_advisory(NdkProfile) -> Array[String]
 M0（第1日）   W1 漂移清理（零风险）＋ W2-A 落地（簿记补齐 + NdkNotFound 接线）
 M1            W3 fail-closed 加固（安全缺口，行为增强例外流程）✅ 已交付 2026-11-26
 M2            W4 CLI extra/多 ABI（高价值低成本，历史「后续」清单）✅ 已交付 2026-11-26
-M3            W5 宿主/API 矩阵纵深（数据表先联网核实再合入）
+M3            W5 宿主/API 矩阵纵深（数据表先联网核实再合入）✅ 已交付 2026-11-26
 M4            W6-A 外部 oracle runner（已裁决 A，M3 后启动）
 ```
 
@@ -259,15 +261,14 @@ M4            W6-A 外部 oracle runner（已裁决 A，M3 后启动）
 
 ## 8. 完成定义（DoD，逐包勾选）
 
-> M1/W3 与 M2/W4 均已交付（2026-11-26），逐项核验通过。
-> M2/W4：新增 API 与 mbti 草案一致（`GenCommandExt`/`parse_gen_args_ext`/`generate_multi`）；
-> 快照 diff 纯加法（+3 声明 +1 struct）；T-W4-1..5 全绿（#skip=0）；五门禁全绿、
-> CLI 退出码矩阵 + 消息文本冻结 + 17 场景逐字节防火墙（冒烟复跑）全符合；
-> 防火墙回归旧用例零改动全绿（wasm/native 各 94/94）；新解析路径 `parse_gen_args_ext`
-> 已随包一行接入截断扫描；零新第三方依赖；README/状态行已同步。
+> M1/W3、M2/W4、M3/W5 均已交付（2026-11-26），逐项核验通过。
+> M3/W5：新增 API 与 mbti 草案一致（`NdkHost`/`host_tag`/`generate_with_host`/`api_level_advisory`）；
+> 快照 diff 纯加法（+4 声明）；T-W5-1..4 全绿（#skip=0）；五门禁全绿、CLI 零漂移（冒烟复跑）；
+> 防火墙回归旧用例零改动全绿（wasm/native 各 99/99）；新解析路径 `api_level_advisory`
+> 已随包一行接入截断扫描；易变事实（darwin 标签、NDK major→API 表）已联网核实并登记 CHANGELOG。
 
-- [x] 新增 API 与 mbti 草案一致（偏差回写本文）—— W3 无新增 API；W4 三声明一 struct 与草案逐字一致
-- [x] 快照 diff 纯加法（W1/W2/W3 为空 diff；W4 +3 声明 +1 struct），CHANGELOG 已登记
+- [x] 新增 API 与 mbti 草案一致（偏差回写本文）—— W3 无新增；W4 三声明一 struct；W5 一 enum 三函数，均与草案逐字一致
+- [x] 快照 diff 纯加法（W1/W2/W3 为空 diff；W4 +3 声明 +1 struct；W5 +4 声明），CHANGELOG 已登记
 - [x] T-W*-* 验收全绿；#skip 显式标注原因（#skip=0）
 - [x] 五门禁全绿；CLI 对外契约零意外漂移（退出码矩阵 + 记录行格式 + 消息文本）
 - [x] 防火墙回归：新函数合入后旧 API 在既有语料上输出逐字节不变/旧用例零改动全绿

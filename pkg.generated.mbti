@@ -8,6 +8,8 @@ import {
 // Values
 pub fn abi_from_name(String) -> Abi raise MoonAbiError
 
+pub fn api_level_advisory(NdkProfile) -> Array[String]
+
 pub fn clang_name(Abi, ApiLevel) -> String raise MoonAbiError
 
 pub fn error_message(MoonAbiError) -> String
@@ -17,6 +19,10 @@ pub fn exit_code_for_error(MoonAbiError) -> Int32
 pub fn generate(NdkProfile, Abi) -> LinkNativeConfig raise MoonAbiError
 
 pub fn generate_multi(NdkProfile, Array[Abi]) -> Array[LinkNativeConfig] raise MoonAbiError
+
+pub fn generate_with_host(NdkProfile, Abi, NdkHost) -> LinkNativeConfig raise MoonAbiError
+
+pub fn host_tag(NdkHost) -> String
 
 pub fn managed_block(LinkNativeConfig) -> String raise MoonAbiError
 
@@ -127,6 +133,12 @@ pub(all) struct NdkCandidate {
   usable : Bool
   version : String?
   note : String
+}
+
+pub(all) enum NdkHost {
+  WindowsX86_64
+  LinuxX86_64
+  DarwinX86_64
 }
 
 pub(all) struct NdkProbeInputs {

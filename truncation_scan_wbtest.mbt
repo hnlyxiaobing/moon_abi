@@ -169,3 +169,24 @@ test "truncation scan: parse_gen_args_ext 参数序列全前缀无 panic (W4)" {
     run_truncation_scan_args(seed, argv => ignore(parse_gen_args_ext(argv)))
   }
 }
+
+///|
+/// 截断扫描：`api_level_advisory` 对 `ndk_version` 全前缀无 panic（W5 新解析路径）。
+/// 版本串被截断到任意前缀（空串/半截 major/`r` 后无数字等）时，
+/// `ndk_major` 只可能返回 `Some`/`None`，advisory 恒返回数组，绝不 panic。
+test "truncation scan: api_level_advisory ndk_version 全前缀无 panic (W5)" {
+  let seeds : Array[String] = ["r27c", "27.0.12077973", "banana", "r"]
+  for seed in seeds {
+    run_truncation_scan(seed, text => {
+      let p : NdkProfile = {
+        ndk_root: "/opt/ndk",
+        ndk_version: text,
+        api_level: ApiLevel::{ level: 21, },
+        extra_link_libs: [],
+        extra_cc_flags: [],
+        windows_path_style: false,
+      }
+      ignore(api_level_advisory(p))
+    })
+  }
+}
