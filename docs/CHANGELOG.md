@@ -4,6 +4,28 @@
 > 快照由 `moon info` 生成（禁手编）；#skip/SKIPPED 永不计入通过。
 > 配套设计文档：[2026-11-16-ndk-config-fidelity-dev-plan.md](2026-11-16-ndk-config-fidelity-dev-plan.md)。
 
+## 2026-11-26 · M4（W6-A 外部 oracle 本地 runner）
+
+> 脚本层落地（零库 API）：`tools/oracle-run.ps1` 把「生成的配置真能被 moon + NDK 消费吗」
+> 变成可复验的结构化差分报告。不修改本仓库源码，不入库第三方 NDK/产物。
+
+- 新增 pub 声明：无（脚本层）。快照 diff：空（`pkg.generated.mbti` 与 `cmd/main/pkg.generated.mbti` 均零漂移）。
+- 交付物：
+  - `tools/oracle-run.ps1`：参数 `-NdkRoot`（仓库外 NDK 根，必填或 SKIPPED）、`-HashFile`（可选 SHA-256 登记）、`-ApiLevel`/`-Abi`、`-ReportDir`、`-KeepTemp`。
+  - `tools/oracle-reports/`：报告产物目录（`oracle-*.json` 被 `.gitignore` 排除）+ README 模板。
+- 行为/契约（T-W6-1..3）：
+  - 无 NDK / 根不存在 / 无 `source.properties` → **SKIPPED**（退出码 78），报告 `counted_as_pass=false`，永不进入通过计数（T-W6-1 无 NDK 侧、T-W6-3）。
+  - 提供 `-HashFile` 且首行 SHA-256 与 `<NdkRoot>/source.properties` 不符 → **拒绝执行**（退出码 1，T-W6-2），不进入构建。
+  - 通过哈希门后：在系统临时目录构造最小可执行 MoonBit 项目（`pkgtype(kind: "executable")` + 确定性 `main.mbt` + CLI `gen --out` 追加受管块），跑 `moon build --target native`；成功 → PASS 退出码 0，失败 → FAIL 退出码 1（T-W6-1 有 NDK 侧）。
+  - 报告字段：`timestamp` / `status` / `exit_code` / `counted_as_pass` / `ndk_root` / `ndk_version` / `ndk_source_properties_sha256` / `toolchain` / `api_level` / `abi` / `detail`。
+  - 边界：不引用仓库外目录（样本路径由参数注入）；临时项目用后即焚（`-KeepTemp` 可保留排查）；许可红线（零第三方入库）。
+- 实测（2026-11-26 本机，无真实 NDK）：
+  - 无 NDK → SKIPPED 78，报告 `counted_as_pass=false`。
+  - 假 NDK + 错误哈希 → FAIL 1（`SHA-256 mismatch ... refuse to execute`）。
+  - 假 NDK + 正确哈希 → gen 成功、`moon build --target native` 因假 cc 不存在而 FAIL 1（证明构建路径真实执行；真 NDK 下将找到 cc 并构建）。
+- 验收：T-W6-1 ✓（无 NDK→SKIPPED；假 NDK→构建尝试与报告）、T-W6-2 ✓（哈希不符拒绝）、T-W6-3 ✓（SKIPPED 报告 `counted_as_pass=false`、退出码 78、不进 `moon test` 计数）。
+- 说明：E3（真实 NDK 下构建成功）需在装有 NDK 的机器上以 `pwsh tools/oracle-run.ps1 -NdkRoot <真实路径>` 复验；本机无 NDK，按设计走 SKIPPED。
+
 ## 2026-11-26 · M3（W5 宿主平台与 API 矩阵纵深）
 
 > 新增三宿主 clang 路径（含 darwin）与 API 上限 advisory；纯加法 API，

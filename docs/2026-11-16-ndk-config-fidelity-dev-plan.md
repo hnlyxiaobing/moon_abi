@@ -1,6 +1,6 @@
 # moon_abi NDK 配置忠实性与边界加固开发文档
 
-> 建立：2026-11-16 ｜ 状态：M1（W3）、M2（W4）、M3（W5）均已交付（2026-11-26），M4 起待开发 ｜ 适用仓库：本仓库（独立自包含）
+> 建立：2026-11-16 ｜ 状态：M0–M4 全部交付（M1/W3、M2/W4、M3/W5、M4/W6-A 均于 2026-11-26 完成）｜ 适用仓库：本仓库（独立自包含）
 > 裁决记录：2026-11-16 用户确认采纳推荐项——**W2-A**（NdkNotFound 接线）、**W6-A**（本地 NDK oracle runner）。
 > 配套文档：[2026-11-16-test-system-design.md](2026-11-16-test-system-design.md)（验收测试 ID `T-W*-*` 出自该文档）
 > 本文所有「现状」结论均为 2026-11-16 对本仓库源码的实测核对，非转述历史文档。
@@ -240,6 +240,8 @@ pub fn api_level_advisory(NdkProfile) -> Array[String]
 **实现要点（A）**：脚本不引用仓库外目录（样本路径由参数注入）；临时项目用后即焚；报告落 tools/oracle-reports/（.gitignore 排除产物，仅保留报告模板）；入库 #skip 占位用例保留不删。
 **验收**：T-W6-1（有 NDK→差分报告；无 NDK→显式 SKIPPED）、T-W6-2（哈希不符拒绝执行）、T-W6-3（SKIPPED 不进通过计数）。
 
+**验收（实测结果）**：T-W6-1 ✓（无 NDK→SKIPPED 退出码 78 + 结构化报告；假 NDK + 通过哈希门→gen 成功并执行 `moon build --target native`，因假 cc 不存在 FAIL 退出码 1，报告含 NDK 哈希/版本/工具链/退出码）；T-W6-2 ✓（错误哈希→FAIL 退出码 1，`SHA-256 mismatch ... refuse to execute`，不进入构建）；T-W6-3 ✓（SKIPPED 报告 `counted_as_pass=false`，退出码 78，脚本不参与 `moon test` 通过计数）。无新增 pub 声明、快照 diff 空。真实 NDK 下的 E3 成功路径需在装有 NDK 的机器复验（本机无 NDK，按设计 SKIPPED）。
+
 ## 6. 里程碑与合入顺序
 
 ```text
@@ -247,7 +249,7 @@ M0（第1日）   W1 漂移清理（零风险）＋ W2-A 落地（簿记补齐 +
 M1            W3 fail-closed 加固（安全缺口，行为增强例外流程）✅ 已交付 2026-11-26
 M2            W4 CLI extra/多 ABI（高价值低成本，历史「后续」清单）✅ 已交付 2026-11-26
 M3            W5 宿主/API 矩阵纵深（数据表先联网核实再合入）✅ 已交付 2026-11-26
-M4            W6-A 外部 oracle runner（已裁决 A，M3 后启动）
+M4            W6-A 外部 oracle runner（已裁决 A，M3 后启动）✅ 已交付 2026-11-26
 ```
 
 排序判据：先零风险文档、再安全缺口、再高价值低成本、最后安全敏感/大件；每包独立提交、独立过五门禁；W2/W6 已于 2026-11-16 裁决（均采纳 A）。
@@ -261,14 +263,13 @@ M4            W6-A 外部 oracle runner（已裁决 A，M3 后启动）
 
 ## 8. 完成定义（DoD，逐包勾选）
 
-> M1/W3、M2/W4、M3/W5 均已交付（2026-11-26），逐项核验通过。
-> M3/W5：新增 API 与 mbti 草案一致（`NdkHost`/`host_tag`/`generate_with_host`/`api_level_advisory`）；
-> 快照 diff 纯加法（+4 声明）；T-W5-1..4 全绿（#skip=0）；五门禁全绿、CLI 零漂移（冒烟复跑）；
-> 防火墙回归旧用例零改动全绿（wasm/native 各 99/99）；新解析路径 `api_level_advisory`
-> 已随包一行接入截断扫描；易变事实（darwin 标签、NDK major→API 表）已联网核实并登记 CHANGELOG。
+> M0–M4 全部六包均已交付（2026-11-26），逐项核验通过。
+> M4/W6-A：脚本层 `tools/oracle-run.ps1` 落地；T-W6-1..3 实测（无 NDK→SKIPPED 78、错误哈希→拒绝 1、
+> SKIPPED 不计通过）；无新增 pub 声明、快照 diff 空；零第三方 NDK/产物入库；报告目录 .gitignore 排除产物。
+> 真实 NDK 下 E3 成功路径需在装有 NDK 的机器复验（本机无 NDK，按设计 SKIPPED）。
 
-- [x] 新增 API 与 mbti 草案一致（偏差回写本文）—— W3 无新增；W4 三声明一 struct；W5 一 enum 三函数，均与草案逐字一致
-- [x] 快照 diff 纯加法（W1/W2/W3 为空 diff；W4 +3 声明 +1 struct；W5 +4 声明），CHANGELOG 已登记
+- [x] 新增 API 与 mbti 草案一致（偏差回写本文）—— W3 无新增；W4 三声明一 struct；W5 一 enum 三函数；W6 脚本层无 API，均与草案逐字一致
+- [x] 快照 diff 纯加法（W1/W2/W3 为空 diff；W4 +3 声明 +1 struct；W5 +4 声明；W6 空 diff），CHANGELOG 已登记
 - [x] T-W*-* 验收全绿；#skip 显式标注原因（#skip=0）
 - [x] 五门禁全绿；CLI 对外契约零意外漂移（退出码矩阵 + 记录行格式 + 消息文本）
 - [x] 防火墙回归：新函数合入后旧 API 在既有语料上输出逐字节不变/旧用例零改动全绿

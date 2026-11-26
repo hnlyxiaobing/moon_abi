@@ -87,11 +87,12 @@ pub trait ConfigRenderer {
 - `moon run cmd/main --target native -- gen ...` / `probe ...`。
 - `gen` 选项：`--abi`（可重复、去重保序）、`--api`、`--ndk-root`、`--ndk-version`、`--out`、`--path-style`、`--extra-lib`（可重复）、`--extra-cc-flag`（可重复）。多 ABI 仅打印 stdout（块间单空行），与 `--out` 互斥（退出码 2）。
 - 复验：`moon clean` → `moon check --deny-warn` → `moon build` → `moon test` → `moon fmt --check` → `moon info` 后检查 `pkg.generated.mbti` 无意外 diff。
+- 外部 oracle（W6-A，只读差分，仓库外 NDK 由参数注入）：`pwsh tools/oracle-run.ps1 -NdkRoot <NDK根> [-HashFile <SHA256登记>]`。无 NDK → 显式 SKIPPED（退出码 78，不计通过）；哈希不符 → 拒绝执行（退出码 1）；报告落 `tools/oracle-reports/`（产物 .gitignore 排除）。
 - 本仓库为独立 Git 仓库，文档与 CI 均自包含，不依赖工作区其他目录。
 
 ## 6. 风险与未决
 
-- E3（MoonBit → C → NDK clang + CMake 产出可加载 `.so`）未复现，本工作区无 `mvp/` 目录；模块侧只读差分 runner 已裁决（W6-A，见 docs/ 开发文档），待落地。
+- E3（MoonBit → C → NDK clang + CMake 产出可加载 `.so`）未复现，本工作区无 `mvp/` 目录；模块侧只读差分 runner 已落地（W6-A `tools/oracle-run.ps1`）。真实 NDK 下构建成功路径需在装有 NDK 的机器复验（本机无 NDK，按设计 SKIPPED）。
 - 「NDK r23 移除 standalone toolchain」是误述，实际移除的是 GNU binutils 与 GDB。
 - 已知局限：probe 文本记录行（`NDK|…`/`CAND|…`/`WARN|…`）在路径含 `|` 或换行时解析歧义；JSON 通道无此问题。记录行格式冻结，如需转义走未来新函数。
 - 提交数口径：以 `git rev-list --count HEAD` 实测为准（2026-11-16 基线 16，历史申报口径 15 滞后）。

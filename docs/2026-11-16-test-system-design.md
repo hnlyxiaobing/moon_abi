@@ -7,6 +7,7 @@
 > M1（W3）交付后 2026-11-26 复跑：双目标各 **86/86**（+5，旧用例零改动）、#skip=0；快照 diff 空；T-W3-1..5 全绿；新解析路径随包一行接入截断扫描。
 > M2（W4）交付后 2026-11-26 复跑：双目标各 **94/94**（+8，旧用例零改动）、#skip=0；快照 diff 纯加法（+3 声明 +1 struct）；T-W4-1..5 全绿；`parse_gen_args_ext` 新解析路径随包一行接入截断扫描；17 场景逐字节防火墙 + 4 个 W4 新场景实跑符合。
 > M3（W5）交付后 2026-11-26 复跑：双目标各 **99/99**（+5，旧用例零改动）、#skip=0；快照 diff 纯加法（+4 声明）；T-W5-1..4 全绿；`api_level_advisory` 新解析路径随包一行接入截断扫描；darwin 宿主标签与 NDK major→API 表已联网核实并登记 CHANGELOG。
+> M4（W6-A）交付后 2026-11-26：脚本层 `tools/oracle-run.ps1` 落地（无新增 pub、快照空）；T-W6-1..3 实测（SKIPPED 78 / 哈希拒绝 1 / `counted_as_pass=false`）；真实 NDK 下 E3 成功路径待有 NDK 机器复验。
 
 ## 1. 第一性原理：本库的正确性是什么
 
@@ -112,7 +113,7 @@ R runner：样本路径+登记哈希 → 哈希不符拒绝执行 → 规范化�
 | S2 | 安全拒绝场景（空格/畸形/越界先于写盘整体拒绝） | ✓ | | | | ✓ | 实跑 malformed 时原文件未被改写（B13/B14） | 多 END/空白已落地(W3)；越界→W3；多 ABI+--out 已落地(W4) |
 | C1 | 输入安全（畸形不 panic/内存有界） | ◐ | ◐ | | | | 错误注入覆盖+W3 截断扫描（render 空白 token 全前缀） | 变异体→W3/W4 随包 |
 | C2 | 防火墙（新函数不改旧语义） | ◐ | ✗ | | | ◐ | T-W2-2 已过（W2 失败路径逐字节差分）；T-W4-4 17 场景逐字节（W4）；T-W5-2 win/linux 逐字节（W5）；其余未固化 | P7→后续 |
-| C3 | 许可红线（F-D 零入库） | ✓ | | | | | 临时目录自产+用后即焚（B36） | R runner 哈希门禁→W6 |
+| C3 | 许可红线（F-D 零入库） | ✓ | | | | | 临时目录自产+用后即焚（B36）；oracle runner 哈希门禁+报告 .gitignore 排除产物（W6-A） | — |
 | C4 | 契约稳定（快照/记录行/退出码） | ✓ | | ✓ | | ✓ | CI 快照门禁+实跑矩阵（B24） | 簿记/引用扫描门禁→W1/W2 |
 
 ### 6.2 错误变体触发簿记（11/11 强制）
@@ -176,9 +177,9 @@ R runner：样本路径+登记哈希 → 哈希不符拒绝执行 → 规范化�
 | T-W5-2 旧 generate 输出逐字节不变 | W5（已交付 ✓） | C2 | A5/L5 |
 | T-W5-3 api_level_advisory 边界三态 | W5（已交付 ✓） | F4 | A2/L0 |
 | T-W5-4 快照 diff 纯加法+CHANGELOG | W5（已交付 ✓） | C4 | A5/L5 |
-| T-W6-1 有 NDK→差分报告；无 NDK→显式 SKIPPED | W6 | F2 纵深、L3/R | A1/L3 |
-| T-W6-2 哈希不符拒绝执行 | W6 | C3 | A4/R |
-| T-W6-3 SKIPPED 不进通过计数 | W6 | C3、C4 | A5/L5 |
+| T-W6-1 有 NDK→差分报告；无 NDK→显式 SKIPPED | W6-A（已交付 ✓，脚本层） | F2 纵深、L3/R | A1/L3 |
+| T-W6-2 哈希不符拒绝执行 | W6-A（已交付 ✓，脚本层） | C3 | A4/R |
+| T-W6-3 SKIPPED 不进通过计数 | W6-A（已交付 ✓，脚本层） | C3、C4 | A5/L5 |
 
 ## 7. L4 CLI 场景 E2E
 
@@ -243,6 +244,6 @@ moon build --target native  # CLI E2E 前置
 - [x] L0：99 条全绿（M3/W5 后，原 94/86/76/68 基线经 W3→W4→W5 递进零改动）；簿记 11/11 已达成（W2）；W5 新函数（NdkHost/host_tag/generate_with_host/api_level_advisory）已附样例。
 - [◐] L1：P1-P8 变形律自动化；截断扫描（W3 新解析路径已一行接入：render 空白 token/merge 多 END/键名变体；W4 parse_gen_args_ext 参数序列；W5 api_level_advisory ndk_version）；≥1000 变异体/轮仍待后续
 - [ ] L2：render golden 维持；probe 记录行/merge 三态 golden 扩充（后续）
-- [ ] L3/R：未实现（W6 已裁决 A，M4 落地；不得预写通过）
-- [ ] L4：17 场景基线脚本固化（脚本层 W6；W4 已实跑全部 17+4 场景并登记）；新增多 ABI 两场景已实跑通过
-- [ ] L5：快照门禁已在 CI；簿记/变异自检/引用扫描/双目标等价随 W1/W2 落地
+- [x] L3/R：W6-A 脚本层落地 `tools/oracle-run.ps1`；无 NDK→SKIPPED 78、哈希不符→拒绝 1、SKIPPED `counted_as_pass=false`（T-W6-1..3 实跑；真实 NDK 下 E3 成功路径待有 NDK 机器复验，本机无 NDK 按设计 SKIPPED）
+- [◐] L4：W4 已实跑全部 17+4 场景并登记；仓库内脚本固化仍待（脚本层 W6 已建 oracle runner，CLI 场景脚本化属可选 job）
+- [◐] L5：快照门禁已在 CI；簿记/变异自检/引用扫描/双目标等价随 W1/W2 落地（引用实存性扫描待脚本化）
