@@ -7,7 +7,8 @@
 > M1（W3）交付后 2026-11-26 复跑：双目标各 **86/86**（+5，旧用例零改动）、#skip=0；快照 diff 空；T-W3-1..5 全绿；新解析路径随包一行接入截断扫描。
 > M2（W4）交付后 2026-11-26 复跑：双目标各 **94/94**（+8，旧用例零改动）、#skip=0；快照 diff 纯加法（+3 声明 +1 struct）；T-W4-1..5 全绿；`parse_gen_args_ext` 新解析路径随包一行接入截断扫描；17 场景逐字节防火墙 + 4 个 W4 新场景实跑符合。
 > M3（W5）交付后 2026-11-26 复跑：双目标各 **99/99**（+5，旧用例零改动）、#skip=0；快照 diff 纯加法（+4 声明）；T-W5-1..4 全绿；`api_level_advisory` 新解析路径随包一行接入截断扫描；darwin 宿主标签与 NDK major→API 表已联网核实并登记 CHANGELOG。
-> M4（W6-A）交付后 2026-11-26：脚本层 `tools/oracle-run.ps1` 落地（无新增 pub、快照空）；T-W6-1..3 实测（SKIPPED 78 / 哈希拒绝 1 / `counted_as_pass=false`）；真实 NDK 下 E3 成功路径待有 NDK 机器复验。
+> M4（W6-A）交付后 2026-11-26：脚本层 `tools/oracle-run.ps1` 落地（无新增 pub、快照空）；T-W6-1..3 实测（SKIPPED 78 / 哈希拒绝 1 / `counted_as_pass=false`）；真实 NDK E3 成功路径已于 2026-11-26 在 WSL/Linux 取得 PASS（NDK r27c `27.2.12479018`、API 28/arm64、`counted_as_pass=true`，报告 `oracle-20261126-210303.json`）；Windows 宿主受 MoonBit 跨编译限制，保留 FAIL 取证。
+> CLI 宿主接线 2026-11-26：`--host` 接入 CLI（默认 macOS 修正为 darwin）；wasm 与 native 双目标各 **109/109**（+10），快照 diff 纯加法（+4 声明 +1 struct）；新增 `gen_cli_host_test.mbt` 9 例 + `parse_gen_args_with_host` 截断扫描 1 例。
 
 ## 1. 第一性原理：本库的正确性是什么
 
@@ -32,10 +33,10 @@
 L0 单元与程序化 fixture（每个 pub fn 行为样例）——现状主体，76 条（M0 后）
 L1 性质与变异（变形律/截断扫描/位翻转/边界值）——现状仅确定性/幂等点状覆盖，待建系统化
 L2 受控黄金差分（内嵌 golden 文本 + 逐字段黄金记录）——现状 render golden 6 组，待扩 probe/merge
-L3 外部 oracle 差分（moon build + 真实 NDK，本地可选，SKIPPED 纪律）——未实现（W6 已裁决 A，待 M4 落地）
+L3 外部 oracle 差分（moon build + 真实 NDK，本地可选，SKIPPED 纪律）——已落地（W6-A）；2026-11-26 真实 NDK PASS
 L4 CLI 场景 E2E（预期场景 + 安全拒绝语料 + 退出码矩阵）——现状 17 场景手工实跑基线，待脚本固化
 L5 元契约门禁（快照/错误簿记/双目标等价/变异自检/引用实存性）——快照门禁已在 CI，其余待建
-R  真实样本本地 runner（仓库外 NDK 路径 + SHA-256 门禁 + 显式 SKIPPED）——未实现（W6）
+R  真实样本本地 runner（仓库外 NDK 路径 + SHA-256 门禁 + 显式 SKIPPED）——已落地（W6-A；PASS 报告登记）
 ```
 
 断言×层承载表：
@@ -84,7 +85,7 @@ builder 能力清单（现有 + 待扩）：
 
 | oracle | 差分对象 | 规范化口径 |
 |---|---|---|
-| moon build --target native + 真实 NDK（W6-A） | 生成片段作为 moon.pkg 是否可被工具链消费（退出码/诊断） | 只比「构建成功与否+错误类别」，不比产物字节（产物属组合根）；临时项目确定性自产 |
+| moon build --target native + 真实 NDK（W6-A） | 生成片段作为 moon.pkg 是否可被工具链消费（退出码/诊断） | 只比「构建成功与否+错误类别」，不比产物字节（产物属组合根）；临时项目确定性自产；2026-11-26 PASS（API 28/arm64；非 Android 宿主需 `MOON_CC`/`MOON_AR`） |
 | moon check（W6-B 降级） | 生成片段 DSL 语法可解析性 | 只比 check 退出码与诊断文本规范化 |
 | NDK 官方目录结构（只读核对） | cc 路径模板/prebuilt 宿主标签/source.properties 键名 | 与本地真实 NDK 目录逐项核对，报告差异；不执行任何构建 |
 
@@ -150,7 +151,7 @@ R runner：样本路径+登记哈希 → 哈希不符拒绝执行 → 规范化�
 |---|---|---|
 | （无） | — | 当前基线零 #skip（2026-11-26 M3/W5 后实测：源码 Grep #skip=0，moon test 99/99） |
 
-计数口径：99 条声明 − 0 条 #skip = 99 执行（2026-11-26 M3/W5 后，wasm 与 native 双目标各 99/99；M2 后 94；M1 后 86；M0 后基线 76；M0 前基线 68）；`--include-skipped` 结果单独报告。W6 若落地，R 层占位用例以 #skip 入库并在此表单列。
+计数口径：99 条声明 − 0 条 #skip = 99 执行（2026-11-26 M3/W5 后，wasm 与 native 双目标各 99/99；之后 CLI 宿主接线 +10，见文档头 109/109；M2 后 94；M1 后 86；M0 后基线 76；M0 前基线 68）；`--include-skipped` 结果单独报告。W6 若落地，R 层占位用例以 #skip 入库并在此表单列。
 
 ### 6.5 验收 ID 双向追溯表
 
@@ -180,6 +181,7 @@ R runner：样本路径+登记哈希 → 哈希不符拒绝执行 → 规范化�
 | T-W6-1 有 NDK→差分报告；无 NDK→显式 SKIPPED | W6-A（已交付 ✓，脚本层） | F2 纵深、L3/R | A1/L3 |
 | T-W6-2 哈希不符拒绝执行 | W6-A（已交付 ✓，脚本层） | C3 | A4/R |
 | T-W6-3 SKIPPED 不进通过计数 | W6-A（已交付 ✓，脚本层） | C3、C4 | A5/L5 |
+| T-W6-4 真实 NDK `moon build` 成功路径 PASS（API 28/arm64，WSL/Linux） | W6-A（2026-11-26 达成 ✓） | L3、R | A1/L3 |
 
 ## 7. L4 CLI 场景 E2E
 

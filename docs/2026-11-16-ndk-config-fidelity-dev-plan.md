@@ -1,6 +1,6 @@
 # moon_abi NDK 配置忠实性与边界加固开发文档
 
-> 建立：2026-11-16 ｜ 状态：M0–M4 全部交付（M1/W3、M2/W4、M3/W5、M4/W6-A 均于 2026-11-26 完成）｜ 适用仓库：本仓库（独立自包含）
+> 建立：2026-11-16 ｜ 状态：M0–M4 全部交付（M1/W3、M2/W4、M3/W5、M4/W6-A 均于 2026-11-26 完成）；2026-11-26 追加 CLI 宿主接线补丁（`--host`，双目标 109/109）与 E3 真实 NDK PASS（WSL/Linux，见 B40）｜ 适用仓库：本仓库（独立自包含）
 > 裁决记录：2026-11-16 用户确认采纳推荐项——**W2-A**（NdkNotFound 接线）、**W6-A**（本地 NDK oracle runner）。
 > 配套文档：[2026-11-16-test-system-design.md](2026-11-16-test-system-design.md)（验收测试 ID `T-W*-*` 出自该文档）
 > 本文所有「现状」结论均为 2026-11-16 对本仓库源码的实测核对，非转述历史文档。
@@ -22,7 +22,7 @@
 - F9 错误模型与人读消息（`MoonAbiError` 11 变体 / `error_message`）
 - F10 路径风格推断（`windows_path_style_of` / `PathStyle`）
 
-非目标清单：不调用真实 NDK clang / CMake、不产出 `.so`；不引入 `zig-cross`（R4 复议结论）；含空格路径提前拒绝、不自动加引号；受管块外用户内容永不改写；不安装/下载 NDK；E3（可加载产物复现）属组合根集成，不在本库。
+非目标清单：不调用真实 NDK clang / CMake、不产出 `.so`；不引入 `zig-cross`（R4 复议结论）；含空格路径提前拒绝、不自动加引号；受管块外用户内容永不改写；本仓库/CI 不安装或下载 NDK（本地 E3 复验在仓库外手动准备，不入库）；E3 可加载产物（`.so` + CMake 组合根）不在本库；模块侧 oracle 由 W6-A 脚本层按需触发。
 
 ### B# 基线事实表
 
@@ -51,7 +51,7 @@
 | B21 | 已实现（含契约局限）：ndk_probe_text 记录行 `NDK|…`/`CAND|…`/`WARN|…`；ndk_probe_json 单行、字段序确定、json_escape 覆盖引号/反斜杠/控制字符（\uXXXX）。局限：路径含 `|` 或换行时文本记录行无转义，解析会歧义（未文档化） | ndk_probe.mbt L603-677；ndk_probe_test.mbt「转义合法」、r4_edge_test.mbt「JSON 单行」 |
 | B22 | 缺口（宿主覆盖）：cc_path 宿主标签仅 windows-x86_64 / linux-x86_64，无 darwin 宿主；macOS 主机无法生成正确 prebuilt 路径 | moon_abi.mbt `cc_path` L255-276 |
 | B23 | 缺口（版本纵深）：无 API 上限/NDK 版本×API 矩阵校验；level=100000 可通过 generate（parse 层仅 cap 100000）；无「level 高于该 NDK 已知最高 API」告警 | moon_abi.mbt `check_api_level`；gen_cli.mbt `parse_api_level_value` |
-| B24 | 实测基线：五门禁全绿（见文档头）；wasm 与 native 双目标各 99/99（M3/W5 后，2026-11-26）；#skip=0；工作树干净 | 2026-11-26 本机实跑 |
+| B24 | 实测基线：五门禁全绿（见文档头）；M3/W5 后 wasm 与 native 双目标各 99/99（2026-11-26）；#skip=0；工作树干净 | 2026-11-26 本机实跑 |
 | B25 | 计数重测：测试声明 68 条 = gen_cli_test 16 + moon_abi_test 21 + wbtest 9 + ndk_probe_test 7 + ndk_probe_fs_test 3 + gen_cli_fs_test 3 + r4_edge_test 9；与 README「68/68」口径一致 | 逐文件 Select-String 重数 + moon test 实跑 |
 | B26 | 漂移（计数）：`git rev-list --count HEAD` = **16**，历史申报口径「15 条有效提交」滞后 +1 | 2026-11-16 git 实测 |
 | B27 | 漂移（API 索引）：README §3 索引缺 4 条 pub 声明：`pub async fn probe_ndk`、`pub async fn sync_config_file`、`pub fn MoonAbiError::to_repr`、`pub trait ConfigRenderer`（索引只抽 `pub fn` 行，漏 async/方法/trait） | README.md L32-65 ↔ pkg.generated.mbti 逐条核对 |
@@ -66,6 +66,8 @@
 | B36 | fixture 形态：无 tests/fixtures 目录；全部测试为程序化构造 + 内嵌 golden 字符串；无死资产、无登记文件缺失问题 | 目录实测 + 测试文件通读 |
 | B37 | 观察（非缺陷）：probe 实跑（本机无 NDK）found=false 退出 1、6 候选；join_path 对含 `/` 的 child 产生混合分隔符（如 `C:\…\Android/Sdk\ndk`），Windows 接受、风格推断不受影响 | ndk_probe.mbt `join_path`；本机 probe --json 实跑 |
 | B38 | 版本一致性：CLI tool_version "0.1.0" 与 moon.mod version 一致；--version 输出 "moon-abi 0.1.0" | cmd/main/main.mbt L19；moon.mod L14；实跑 |
+| B39 | **已修复（CLI 宿主接线，2026-11-26）**：W5 宿主能力接入 CLI（`--host windows|linux|darwin`；未指定时显式 `--path-style` 维持旧的 windows/linux 映射，`auto` 下 macOS + unix 风格根修正为 darwin）；旧 Windows/Linux 参数组合输出逐字节不变；wasm/native 各 109/109，快照 +4 声明 +1 struct | gen_cli_ext.mbt `parse_gen_args_with_host`/`generate_multi_with_host`/`resolve_default_host`；cmd/main main.mbt `current_platform_host`；CHANGELOG |
+| B40 | **E3 真实 PASS（2026-11-26）**：WSL Ubuntu 24.04.4 + NDK r27c `27.2.12479018` + moon 0.1.20261126，API 28/arm64，`moon build --target native` 退出码 0，`counted_as_pass=true`；报告 `oracle-20261126-210303.json`（gitignore）。runner 新增 `-CrossCc/-CrossAr`（仅临时构建注入 `MOON_CC/MOON_AR`）与 `host_os/cross_cc/cross_ar` 字段。Windows 宿主 FAIL 取证：NDK 无 `<triple>-ar`、package cc 不改变共享 runtime 目标、全局 `MOON_CC` 受 core `platform` cfg 限制 | tools/oracle-run.ps1；oracle-reports/README；CHANGELOG |
 
 **对历史口径的修正**：
 
@@ -266,7 +268,9 @@ M4            W6-A 外部 oracle runner（已裁决 A，M3 后启动）✅ 已�
 > M0–M4 全部六包均已交付（2026-11-26），逐项核验通过。
 > M4/W6-A：脚本层 `tools/oracle-run.ps1` 落地；T-W6-1..3 实测（无 NDK→SKIPPED 78、错误哈希→拒绝 1、
 > SKIPPED 不计通过）；无新增 pub 声明、快照 diff 空；零第三方 NDK/产物入库；报告目录 .gitignore 排除产物。
-> 真实 NDK 下 E3 成功路径需在装有 NDK 的机器复验（本机无 NDK，按设计 SKIPPED）。
+> 真实 NDK 下 E3 成功路径已于 2026-11-26 在 WSL/Linux 宿主取得 PASS（见 B40）；Windows 宿主受
+> package-level cc 不改变共享 runtime 目标与 core `platform` cfg 限制，保持 FAIL 取证；可加载 `.so`
+> 的 CMake/组合根集成仍不在本库范围。
 
 - [x] 新增 API 与 mbti 草案一致（偏差回写本文）—— W3 无新增；W4 三声明一 struct；W5 一 enum 三函数；W6 脚本层无 API，均与草案逐字一致
 - [x] 快照 diff 纯加法（W1/W2/W3 为空 diff；W4 +3 声明 +1 struct；W5 +4 声明；W6 空 diff），CHANGELOG 已登记

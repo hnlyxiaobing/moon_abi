@@ -38,6 +38,7 @@ fn usage_text() -> String {
     "  --ndk-version <ver> NDK version, e.g. r27c or 27.0.12077973 (else read from NDK)",
     "  --out <path>        write/merge into moon.pkg instead of printing to stdout",
     "  --path-style <s>    auto|windows|unix (default auto, inferred from ndk root)",
+    "  --host <h>          windows|linux|darwin (default: path style, darwin on macOS)",
     "  --extra-lib <name>  repeatable; append -l<name> to link libraries (log,android are default)",
     "  --extra-cc-flag <f> repeatable; extra cc flags appended after --target",
     "",
@@ -149,15 +150,43 @@ async fn resolve_ndk(
 }
 
 ///|
-/// `gen` 主流程：解析参数（多 ABI + extra）→ 补齐 NDK → 生成配置 → 打印或幂等写文件。
+/// 当前运行平台的 NDK prebuilt 宿主标签（CLI 默认宿主推断用）。
+/// 仅 native 后端区分平台；wasm 构建（`moon check` 等）回退 linux 以保证可编译，
+/// 该分支不参与实际 CLI 运行。
+#cfg(platform="windows")
+fn current_platform_host() -> @moon_abi.NdkHost {
+  @moon_abi.NdkHost::WindowsX86_64
+}
+
+///|
+#cfg(platform="macos")
+fn current_platform_host() -> @moon_abi.NdkHost {
+  @moon_abi.NdkHost::DarwinX86_64
+}
+
+///|
+#cfg(all(target="native", not(platform="windows"), not(platform="macos")))
+fn current_platform_host() -> @moon_abi.NdkHost {
+  @moon_abi.NdkHost::LinuxX86_64
+}
+
+///|
+#cfg(not(target="native"))
+fn current_platform_host() -> @moon_abi.NdkHost {
+  @moon_abi.NdkHost::LinuxX86_64
+}
+
+///|
+/// `gen` 主流程：解析参数（多 ABI + extra + 宿主）→ 补齐 NDK → 生成配置 → 打印或幂等写文件。
 ///
-/// W4：切换到扩展解析器 `parse_gen_args_ext`；旧参数组合（单 ABI、带 `--out`、路径
-/// 风格覆盖等）的 stdout/stderr/退出码/落盘内容与旧解析器逐字节一致（防火墙 T-W4-4）。
+/// W4：切换到扩展解析器；旧参数组合（单 ABI、带 `--out`、路径风格覆盖等）的
+/// stdout/stderr/退出码/落盘内容与旧解析器逐字节一致（防火墙 T-W4-4）。
 /// 多 ABI + `--out` 在库解析层已抛 `CliUsage`（退出码 2），此处错误通道不变。
 async fn gen_impl(rest : ArrayView[String]) -> Int32 {
-  let ext = @moon_abi.parse_gen_args_ext(rest) catch {
+  let parsed = @moon_abi.parse_gen_args_with_host(rest) catch {
     e => return report_lib(e)
   }
+  let ext = parsed.command
   let (ndk_root, ndk_version) = match resolve_ndk(ext.base) {
     Ok(pair) => pair
     Err(reason) => {
@@ -178,7 +207,22 @@ async fn gen_impl(rest : ArrayView[String]) -> Int32 {
     extra_cc_flags: ext.extra_cc_flags,
     windows_path_style,
   }
-  let configs = @moon_abi.generate_multi(profile, ext.abis) catch {
+  let host = match parsed.host {
+    Some(h) => h
+    None =>
+      match ext.base.path_style {
+        // 显式 --path-style 维持旧语义：windows → windows，unix → linux（可跨宿主生成）。
+        @moon_abi.PathStyle::Windows => @moon_abi.NdkHost::WindowsX86_64
+        @moon_abi.PathStyle::Unix => @moon_abi.NdkHost::LinuxX86_64
+        // auto：Windows 风格根沿用旧行为；unix 风格根在 macOS 上修正为 darwin。
+        @moon_abi.PathStyle::Auto =>
+          @moon_abi.resolve_default_host(
+            windows_path_style,
+            current_platform_host(),
+          )
+      }
+  }
+  let configs = @moon_abi.generate_multi_with_host(profile, ext.abis, host) catch {
     e => return report_lib(e)
   }
   let blocks : Array[String] = []

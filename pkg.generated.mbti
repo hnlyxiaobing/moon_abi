@@ -20,7 +20,11 @@ pub fn generate(NdkProfile, Abi) -> LinkNativeConfig raise MoonAbiError
 
 pub fn generate_multi(NdkProfile, Array[Abi]) -> Array[LinkNativeConfig] raise MoonAbiError
 
+pub fn generate_multi_with_host(NdkProfile, Array[Abi], NdkHost) -> Array[LinkNativeConfig] raise MoonAbiError
+
 pub fn generate_with_host(NdkProfile, Abi, NdkHost) -> LinkNativeConfig raise MoonAbiError
+
+pub fn host_from_name(String) -> NdkHost raise MoonAbiError
 
 pub fn host_tag(NdkHost) -> String
 
@@ -38,11 +42,15 @@ pub fn parse_gen_args(ArrayView[String]) -> GenCommand raise MoonAbiError
 
 pub fn parse_gen_args_ext(ArrayView[String]) -> GenCommandExt raise MoonAbiError
 
+pub fn parse_gen_args_with_host(ArrayView[String]) -> GenCommandWithHost raise MoonAbiError
+
 pub async fn probe_ndk(NdkProbeInputs) -> NdkProbeResult
 
 pub fn probe_ndk_with(NdkProbeInputs, (String) -> Bool, (String) -> Array[String], (String) -> String?) -> NdkProbeResult
 
 pub fn render(LinkNativeConfig) -> String raise MoonAbiError
+
+pub fn resolve_default_host(Bool, NdkHost) -> NdkHost
 
 pub fn resolve_ndk_values(GenCommand, NdkProbeResult) -> (String, String) raise MoonAbiError
 
@@ -97,6 +105,11 @@ pub(all) struct GenCommandExt {
   abis : Array[Abi]
   extra_link_libs : Array[String]
   extra_cc_flags : Array[String]
+}
+
+pub(all) struct GenCommandWithHost {
+  command : GenCommandExt
+  host : NdkHost?
 }
 
 pub(all) enum GenOutput {

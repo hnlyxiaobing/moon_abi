@@ -200,3 +200,120 @@ pub fn generate_multi(
   }
   out
 }
+
+///|
+/// CLI `--host` 名称解析：接受宿主标签与常见别名，大小写不敏感、忽略首尾空白。
+/// 非法名称抛 `CliUsage`（CLI 映射为退出码 2）。
+pub fn host_from_name(name : String) -> NdkHost raise MoonAbiError {
+  let n = name.trim().to_owned().to_lower()
+  if n == "windows" || n == "win" || n == "windows-x86_64" {
+    WindowsX86_64
+  } else if n == "linux" || n == "linux-x86_64" {
+    LinuxX86_64
+  } else if n == "darwin" ||
+    n == "macos" ||
+    n == "mac" ||
+    n == "osx" ||
+    n == "darwin-x86_64" {
+    DarwinX86_64
+  } else {
+    raise CliUsage("--host expects windows|linux|darwin, got '" + name + "'")
+  }
+}
+
+///|
+/// 带宿主覆盖的扩展解析结果：W4 扩展命令 + 可选宿主。
+/// `host = None` 表示未显式指定，由调用方按「路径风格 + 当前平台」解析默认宿主
+/// （见 `resolve_default_host`）；解析层保持纯函数，不做平台推断。
+pub(all) struct GenCommandWithHost {
+  command : GenCommandExt
+  host : NdkHost?
+}
+
+///|
+/// 解析 `gen` 子命令参数（W4 全部选项 + 可选 `--host`）。
+///
+/// 实现方式：先剥离 `--host` / `--host=<name>`，其余参数原样交给
+/// `parse_gen_args_ext`，因此旧选项的解析语义、错误消息与顺序保持不变。
+/// - `--host` 至多一次；缺值 / 空值 / 非法值 / 重复 → `CliUsage`。
+/// - `--host` 与显式 `--path-style windows|unix` 互斥 → `CliUsage`
+///   （宿主已决定分隔符与 prebuilt 标签，路径风格不再参与）。
+/// 纯函数、确定性、不做 I/O。
+pub fn parse_gen_args_with_host(
+  args : ArrayView[String],
+) -> GenCommandWithHost raise MoonAbiError {
+  let kept : Array[String] = []
+  let mut host : NdkHost? = None
+  let mut host_seen = false
+  let mut i = 0
+  while i < args.length() {
+    let raw = args[i]
+    let (flag, inline) = split_flag(raw)
+    if flag == "--host" {
+      if host_seen {
+        raise CliUsage("duplicate option --host")
+      }
+      host_seen = true
+      let (v, next) = take_flag_value(flag, inline, args, i)
+      i = next
+      if v.is_blank() {
+        raise CliUsage("--host must not be empty")
+      }
+      host = Some(host_from_name(v))
+    } else {
+      kept.push(raw)
+    }
+    i = i + 1
+  }
+  let command = parse_gen_args_ext(kept)
+  if host is Some(_) {
+    match command.base.path_style {
+      Auto => ()
+      _ => raise CliUsage("--host cannot be combined with --path-style")
+    }
+  }
+  { command, host, }
+}
+
+///|
+/// 按输入序为每个 ABI 以显式宿主生成 `LinkNativeConfig`。
+///
+/// - 空数组 → `CliUsage`（至少需要一个 ABI）。
+/// - 逐个调用 `generate_with_host`；错误原样传播，首个失败即抛。
+/// - 纯函数、确定性；不读取任何外部状态。
+pub fn generate_multi_with_host(
+  profile : NdkProfile,
+  abis : Array[Abi],
+  host : NdkHost,
+) -> Array[LinkNativeConfig] raise MoonAbiError {
+  if abis.is_empty() {
+    raise CliUsage("generate_multi_with_host requires at least one ABI")
+  }
+  let out : Array[LinkNativeConfig] = []
+  for abi in abis {
+    out.push(generate_with_host(profile, abi, host))
+  }
+  out
+}
+
+///|
+/// 未显式指定 `--host` 且路径风格为 `auto` 时的默认宿主解析：保持既有路径风格
+/// 推断的兼容语义，仅修正 macOS 上 unix 风格 NDK 根被误判为 linux 的缺口。
+/// （显式 `--path-style windows|unix` 由调用方直接映射，不经本函数。）
+/// - `path_looks_windows = true` → `WindowsX86_64`（与旧 `generate` 一致）。
+/// - 否则：当前平台为 macOS → `DarwinX86_64`；其余平台（Windows/Linux）→
+///   `LinuxX86_64`（与旧 `generate` 在 unix 风格根上的输出逐字节一致）。
+/// 纯函数、确定性。
+pub fn resolve_default_host(
+  path_looks_windows : Bool,
+  running_host : NdkHost,
+) -> NdkHost {
+  if path_looks_windows {
+    WindowsX86_64
+  } else {
+    match running_host {
+      DarwinX86_64 => DarwinX86_64
+      _ => LinuxX86_64
+    }
+  }
+}

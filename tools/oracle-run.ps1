@@ -1,4 +1,4 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 <#
 .SYNOPSIS
   moon_abi 外部 oracle 本地 runner（W6-A / M4，只读差分；G6/E3 模块侧）。
@@ -34,11 +34,25 @@
 .PARAMETER KeepTemp
   保留临时项目目录用于排查（默认用后即焚）。
 
+.PARAMETER CrossCc
+  可选：交叉编译用 C 编译器（写入临时项目构建的 `MOON_CC`，仅作用于 `moon build`）。
+  MoonBit 的 package-level `link.native.cc` 不能改变共享 runtime 的目标，非 Android 宿主
+  上必须用全局 `MOON_CC` 才能把 runtime 编译到目标 ABI（见 MoonBit native 文档）。
+
+.PARAMETER CrossAr
+  可选：交叉编译用归档器（写入临时项目构建的 `MOON_AR`）。NDK 只提供 `llvm-ar`，
+  不含 `<triple>-ar`；与 `-CrossCc` 搭配使用。
+
 .EXAMPLE
   pwsh tools/oracle-run.ps1 -NdkRoot C:\android-ndk\27.0.12077973
 
 .EXAMPLE
   pwsh tools/oracle-run.ps1 -NdkRoot /opt/android-ndk -HashFile tools/oracle-reports/ndk-hash.txt
+
+.EXAMPLE
+  pwsh tools/oracle-run.ps1 -NdkRoot ~/android-ndk/android-ndk-r27c -ApiLevel 28 `
+    -CrossCc ~/android-ndk/android-ndk-r27c/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android28-clang `
+    -CrossAr ~/android-ndk/android-ndk-r27c/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
 #>
 [CmdletBinding()]
 param(
@@ -47,7 +61,9 @@ param(
   [string]$ApiLevel = "21",
   [string]$Abi = "arm64",
   [string]$ReportDir = "",
-  [switch]$KeepTemp
+  [switch]$KeepTemp,
+  [string]$CrossCc = "",
+  [string]$CrossAr = ""
 )
 
 $ErrorActionPreference = "Continue"
@@ -60,6 +76,12 @@ if ([string]::IsNullOrWhiteSpace($ReportDir)) {
 New-Item -ItemType Directory -Force -Path $ReportDir | Out-Null
 
 $timestamp = (Get-Date).ToString("yyyy-MM-ddTHH:mm:sszzz")
+$hostOs = ""
+try {
+  $hostOs = [System.Runtime.InteropServices.RuntimeInformation]::OSDescription
+} catch {
+  $hostOs = "unknown"
+}
 $reportPath = Join-Path $ReportDir ("oracle-" + (Get-Date).ToString("yyyyMMdd-HHmmss") + ".json")
 
 function Write-OracleReport {
@@ -80,6 +102,9 @@ function Write-OracleReport {
     ndk_version                  = $NdkVersion
     ndk_source_properties_sha256 = $SourceHash
     toolchain                    = $Toolchain
+    host_os                      = $hostOs
+    cross_cc                     = $CrossCc
+    cross_ar                     = $CrossAr
     api_level                    = $ApiLevel
     abi                          = $Abi
     detail                       = $Detail
@@ -156,6 +181,11 @@ try {
   # 先声明可执行包类型，再由 CLI `gen --out` 追加受管块（追加语义与真实 moon.pkg 一致）。
   'pkgtype(kind: "executable")' | Set-Content -LiteralPath $moonPkg -Encoding ASCII
   $ndkArg = if ([string]::IsNullOrWhiteSpace($ndkVersion)) { "r27" } else { $ndkVersion }
+  # gen 步骤用宿主默认工具链构建 CLI；交叉环境只在临时项目构建阶段注入。
+  $savedCrossCc = $env:MOON_CC
+  $savedCrossAr = $env:MOON_AR
+  $env:MOON_CC = $null
+  $env:MOON_AR = $null
   $genArgs = @(
     "run", "cmd/main", "--target", "native", "--",
     "gen", "--abi", $Abi, "--api", $ApiLevel,
@@ -174,12 +204,21 @@ try {
   }
 
   # ---- 4. 真实构建差分：moon build --target native ----
+  # 仅在临时项目构建时注入可选的交叉编译工具链（MOON_CC/MOON_AR）。
+  if (-not [string]::IsNullOrWhiteSpace($CrossCc)) {
+    $env:MOON_CC = $CrossCc
+  }
+  if (-not [string]::IsNullOrWhiteSpace($CrossAr)) {
+    $env:MOON_AR = $CrossAr
+  }
   Push-Location $tmp
   try {
     $buildOut = & moon build --target native 2>&1
     $buildCode = $LASTEXITCODE
   } finally {
     Pop-Location
+    $env:MOON_CC = $savedCrossCc
+    $env:MOON_AR = $savedCrossAr
   }
 
   $status = if ($buildCode -eq 0) { "PASS" } else { "FAIL" }

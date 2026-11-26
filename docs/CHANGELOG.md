@@ -4,6 +4,48 @@
 > 快照由 `moon info` 生成（禁手编）；#skip/SKIPPED 永不计入通过。
 > 配套设计文档：[2026-11-16-ndk-config-fidelity-dev-plan.md](2026-11-16-ndk-config-fidelity-dev-plan.md)。
 
+## 2026-11-26 · E3/W6-A 真实 NDK PASS（WSL/Linux 交叉差分）
+
+> 在真实 NDK 上首次取得模块侧 oracle PASS：NDK r27c `27.2.12479018` + moon 0.1.20261126 +
+> WSL Ubuntu 24.04.4，临时项目 `moon build --target native` 退出码 0，`counted_as_pass=true`。
+> Windows 宿主同时完成 FAIL 取证，确认属 MoonBit 工具链的跨编译限制而非本库配置缺陷。
+
+- runner 加法：`tools/oracle-run.ps1` 新增 `-CrossCc` / `-CrossAr`（仅注入临时项目构建的
+  `MOON_CC`/`MOON_AR`；gen 步骤强制清空交叉环境并使用宿主默认工具链），报告新增
+  `host_os` / `cross_cc` / `cross_ar` 字段；脚本保持 UTF-8 BOM 以兼容 Windows PowerShell 5.1。
+  无新增 pub 声明、快照不变、测试计数仍 109/109（无 `.mbt` 变更）。
+- PASS 证据：`tools/oracle-reports/oracle-20261126-210303.json`（`.gitignore` 排除）：
+  `status=PASS` / `exit_code=0` / `counted_as_pass=true`；
+  `ndk_source_properties_sha256=70f1c5165e6d997b18782a49cff71da7a3caacd0c4cd811da24c43359fb83cf6`；
+  `api_level=28` / `abi=arm64`；`cross_cc=…/aarch64-linux-android28-clang`；`cross_ar=…/llvm-ar`。
+- 环境前置（已写入 README/oracle-reports 模板）：非 Android 宿主上 MoonBit package-level
+  `link.native.cc` 不能改变共享 runtime 目标，必须 `MOON_CC` + `MOON_AR`；API 21 会在 runtime
+  `getentropy` 处失败，故本轮用 API 28。
+- Windows 宿主 FAIL 取证（保留为限制证据）：`oracle-20261126-204923`（缺 `<triple>-ar`）、
+  `oracle-20261126-205014`（仅 `MOON_AR` 不生效）、以及 generic-clang 手工探针（归档器通过后，
+  host `libruntime.lib`/x86_64 ELF 与 Android 目标不兼容）。全局 `MOON_CC` 在 Windows 上还会因
+  core `platform` cfg 固定为 Windows 而引用 Windows runtime 符号，无法完成 Windows→Android 差分。
+- NDK 安装位置（仓库外，不入库、不进 CI）：Windows `C:\android-ndk\r27c\android-ndk-r27c`；
+  WSL `~/android-ndk/android-ndk-r27c`。
+- 验收：T-W6-1/2/3 保持（SKIPPED 78 / 哈希拒绝 1 / SKIPPED 不计通过）；E3 成功路径达成并登记报告。
+
+## 2026-11-26 · CLI 宿主接线（W5 能力接入 CLI）
+
+> 修复 W5 只落库层、CLI 无法选择宿主的问题：新增 `gen --host`；未显式指定时保留
+> 路径风格推断的旧行为，仅修正 macOS 上 unix 风格 NDK 根被误判为 linux 的缺口。
+> 旧参数组合（单/多 ABI、`--out`、`--path-style`、extra）输出逐字节不变（Windows/Linux）。
+
+- 新增 pub 声明：`host_from_name(String) -> NdkHost`、`GenCommandWithHost`（struct：`command` / `host`）、`parse_gen_args_with_host(ArrayView[String]) -> GenCommandWithHost`、`generate_multi_with_host(NdkProfile, Array[Abi], NdkHost) -> Array[LinkNativeConfig]`、`resolve_default_host(Bool, NdkHost) -> NdkHost`。快照 diff：纯加法 +4 声明 +1 struct。
+- 行为/契约：
+  - `--host windows|linux|darwin`（别名 `win` / `macos` / `mac` / `osx` / `*-x86_64`，大小写与首尾空白归一）；缺值、空值、非法值、重复 → `CliUsage`（退出码 2）。
+  - `--host` 与显式 `--path-style windows|unix` 互斥 → `CliUsage`（退出码 2），`auto` 可与 `--host` 共存。
+  - 未显式 `--host` 时：显式 `--path-style windows|unix` 维持旧宿主（windows / linux，可跨宿主生成）；`auto`（默认）下 Windows 风格根 → `windows-x86_64`（旧行为），unix 风格根在 macOS 上 → `darwin-x86_64`（修正），Windows/Linux 宿主 → `linux-x86_64`（旧行为）。macOS 修复属 CLI 缺陷修正，登记于此。
+  - 库层旧 `parse_gen_args` / `parse_gen_args_ext` / `generate` / `generate_multi` 一行未改。
+- 测试增量：+10（99→109；wasm 与 native 双目标各 109/109，旧用例零改动，`#skip=0`）。
+  - `gen_cli_host_test.mbt` +9：宿主别名、`--host` 取值/缺省、旧参数 base 等价、5 类错误（含 `--path-style` 冲突）、多 ABI+`--out` 仍拒绝、三宿主 golden cc 路径、多 ABI 顺序/确定性/extra、空数组 `CliUsage`、默认宿主兼容矩阵。
+  - `truncation_scan_wbtest.mbt` +1：`parse_gen_args_with_host` 参数序列全前缀无 panic（新解析路径随包接入扫描）。
+- 门禁/冒烟（2026-11-26 本机）：五门禁全绿；CLI 冒烟覆盖 `--host darwin|linux|windows`（cc 路径符合对应 prebuilt）、缺省旧场景不变、`--host`+`--path-style` 冲突=2、`--host` 缺值=2。
+
 ## 2026-11-26 · M4（W6-A 外部 oracle 本地 runner）
 
 > 脚本层落地（零库 API）：`tools/oracle-run.ps1` 把「生成的配置真能被 moon + NDK 消费吗」

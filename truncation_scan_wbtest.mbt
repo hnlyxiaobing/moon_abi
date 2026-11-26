@@ -171,6 +171,25 @@ test "truncation scan: parse_gen_args_ext 参数序列全前缀无 panic (W4)" {
 }
 
 ///|
+/// 截断扫描：`parse_gen_args_with_host` 参数序列全前缀无 panic（CLI 宿主接线）。
+/// 覆盖 `--host` 独立/内联形式、别名、与 `--path-style` 冲突种子。
+test "truncation scan: parse_gen_args_with_host 参数序列全前缀无 panic" {
+  let seeds : Array[Array[String]] = [
+    ["--abi", "arm64", "--api", "21", "--host", "darwin"],
+    ["--abi=arm64", "--api=21", "--host=macos"],
+    [
+      "--abi", "arm64", "--api", "21", "--host", "windows", "--path-style", "unix",
+    ],
+    ["--abi", "arm64", "--host", "--api", "21"],
+  ]
+  for seed in seeds {
+    run_truncation_scan_args(seed, argv => {
+      ignore(parse_gen_args_with_host(argv))
+    })
+  }
+}
+
+///|
 /// 截断扫描：`api_level_advisory` 对 `ndk_version` 全前缀无 panic（W5 新解析路径）。
 /// 版本串被截断到任意前缀（空串/半截 major/`r` 后无数字等）时，
 /// `ndk_major` 只可能返回 `Some`/`None`，advisory 恒返回数组，绝不 panic。
