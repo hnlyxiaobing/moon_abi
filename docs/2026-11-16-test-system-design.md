@@ -8,7 +8,7 @@
 > M2（W4）交付后 2026-11-26 复跑：双目标各 **94/94**（+8，旧用例零改动）、#skip=0；快照 diff 纯加法（+3 声明 +1 struct）；T-W4-1..5 全绿；`parse_gen_args_ext` 新解析路径随包一行接入截断扫描；17 场景逐字节防火墙 + 4 个 W4 新场景实跑符合。
 > M3（W5）交付后 2026-11-26 复跑：双目标各 **99/99**（+5，旧用例零改动）、#skip=0；快照 diff 纯加法（+4 声明）；T-W5-1..4 全绿；`api_level_advisory` 新解析路径随包一行接入截断扫描；darwin 宿主标签与 NDK major→API 表已联网核实并登记 CHANGELOG。
 > M4（W6-A）交付后 2026-11-26：脚本层 `tools/oracle-run.ps1` 落地（无新增 pub、快照空）；T-W6-1..3 实测（SKIPPED 78 / 哈希拒绝 1 / `counted_as_pass=false`）；真实 NDK E3 成功路径已于 2026-11-26 在 WSL/Linux 取得 PASS（NDK r27c `27.2.12479018`、API 28/arm64、`counted_as_pass=true`，报告 `oracle-20261126-210303.json`）；Windows 宿主受 MoonBit 跨编译限制，保留 FAIL 取证。
-> CLI 宿主接线 2026-11-26：`--host` 接入 CLI（默认 macOS 修正为 darwin）；wasm 与 native 双目标各 **109/109**（+10），快照 diff 纯加法（+4 声明 +1 struct）；新增 `gen_cli_host_test.mbt` 9 例 + `parse_gen_args_with_host` 截断扫描 1 例。
+> CLI 宿主接线 2026-11-26：`--host` 接入 CLI（默认 macOS 修正为 darwin）；wasm 与 native 双目标各 **109/109**（+10），快照 diff 纯加法（+5 声明：4 fn + 1 struct）；新增 `gen_cli_host_test.mbt` 9 例 + `parse_gen_args_with_host` 截断扫描 1 例。
 
 ## 1. 第一性原理：本库的正确性是什么
 
@@ -30,13 +30,13 @@
 ## 2. 测试分层
 
 ```text
-L0 单元与程序化 fixture（每个 pub fn 行为样例）——现状主体，76 条（M0 后）
-L1 性质与变异（变形律/截断扫描/位翻转/边界值）——现状仅确定性/幂等点状覆盖，待建系统化
-L2 受控黄金差分（内嵌 golden 文本 + 逐字段黄金记录）——现状 render golden 6 组，待扩 probe/merge
-L3 外部 oracle 差分（moon build + 真实 NDK，本地可选，SKIPPED 纪律）——已落地（W6-A）；2026-11-26 真实 NDK PASS
-L4 CLI 场景 E2E（预期场景 + 安全拒绝语料 + 退出码矩阵）——现状 17 场景手工实跑基线，待脚本固化
-L5 元契约门禁（快照/错误簿记/双目标等价/变异自检/引用实存性）——快照门禁已在 CI，其余待建
-R  真实样本本地 runner（仓库外 NDK 路径 + SHA-256 门禁 + 显式 SKIPPED）——已落地（W6-A；PASS 报告登记）
+L0 单元与程序化 fixture（每个 pub fn 行为样例）——当前 109 条（CLI 宿主接线后）
+L1 性质与变异（变形律/截断扫描/位翻转/边界值）——性质点状覆盖与确定性截断扫描已落地；≥1000 变异体/轮仍待建
+L2 受控黄金差分（内嵌 golden 文本 + 逐字段黄金记录）——render golden 6 组；probe/merge 扩充待建
+L3 外部 oracle 差分（moon build + 真实 NDK，本地可选，SKIPPED 纪律）——已落地（W6-A）；2026-11-26 真实 NDK 成功路径已验收 PASS
+L4 CLI 场景 E2E（预期场景 + 安全拒绝语料 + 退出码矩阵）——17 场景手工基线 + W4 四场景已实跑；仓库内脚本固化待建
+L5 元契约门禁（快照/错误簿记/双目标等价/变异自检/引用实存性）——快照与错误簿记 11/11 已门禁化；其余按实际状态分部落地
+R  真实样本本地 runner（仓库外 NDK 路径 + SHA-256 门禁 + 显式 SKIPPED）——已落地（W6-A；真实 PASS 报告已登记）
 ```
 
 断言×层承载表：
@@ -56,7 +56,7 @@ R  真实样本本地 runner（仓库外 NDK 路径 + SHA-256 门禁 + 显式 SK
 |---|---|---|---|---|
 | F-A 程序化构造 | 测试代码内 profile/config/伪目录闭包 builder | 是 | 随仓库 | 主体（B36）：profile()/sample_config()/no_inputs()/注入闭包 |
 | F-B 受控文件 fixture | tests/fixtures/* | 是 | 哈希登记 | **不存在**（B36）：本模块无需二进制 fixture，维持零文件 fixture；临时目录伪 NDK 用后即焚 |
-| F-C 生成器资产 | 确定性脚本产出（变异语料/截断前缀） | 是（种子+算法入库，语料不入库） | 自产 | 待建（L1 系统化，W3/W4 随包） |
+| F-C 生成器资产 | 确定性脚本产出（截断前缀/变异语料） | 是（种子+算法入库，语料不入库） | 自产 | 确定性截断扫描已落地（W3–W5 新解析路径逐包接入）；≥1000 变异体/轮待建 |
 | F-D 真实第三方样本 | 仓库外本地 NDK 安装 | 否（红线） | 许可不明 | R runner（W6-A，M4）；永不入库 |
 
 红线：F-D 永不入库；临时目录测试必须递归清理（现有 gen_cli_fs_test/ndk_probe_fs_test 模式延续）；未来若引入文件 fixture，哈希变更须同步登记+黄金记录。
@@ -90,7 +90,7 @@ builder 能力清单（现有 + 待扩）：
 | NDK 官方目录结构（只读核对） | cc 路径模板/prebuilt 宿主标签/source.properties 键名 | 与本地真实 NDK 目录逐项核对，报告差异；不执行任何构建 |
 
 纪律：oracle 缺失 → 显式 SKIPPED+原因（退出码 78 口径），不得写成通过；oracle 版本（moon/NDK Pkg.Revision）随结果登记。
-R runner：样本路径+登记哈希 → 哈希不符拒绝执行 → 规范化差分 → 报告「本地已差分+哈希+日期」；入库 #skip 占位用例保留不删，真实结论永不进入通过计数。
+R runner：样本路径+登记哈希 → 哈希不符拒绝执行 → 规范化差分 → 报告「本地已差分+哈希+日期」；当前零入库 `#skip` 占位用例，真实构建结论按脚本层 PASS/FAIL/SKIPPED 独立登记，永不混入 `moon test` 通过计数。
 
 ## 6. 覆盖矩阵与错误簿记
 
@@ -149,9 +149,9 @@ R runner：样本路径+登记哈希 → 哈希不符拒绝执行 → 规范化�
 
 | 用例 | 位置 | 原因 |
 |---|---|---|
-| （无） | — | 当前基线零 #skip（2026-11-26 M3/W5 后实测：源码 Grep #skip=0，moon test 99/99） |
+| （无） | — | 当前基线零 #skip（2026-11-26 CLI 宿主接线后实测：源码 Grep #skip=0，moon test 109/109） |
 
-计数口径：99 条声明 − 0 条 #skip = 99 执行（2026-11-26 M3/W5 后，wasm 与 native 双目标各 99/99；之后 CLI 宿主接线 +10，见文档头 109/109；M2 后 94；M1 后 86；M0 后基线 76；M0 前基线 68）；`--include-skipped` 结果单独报告。W6 若落地，R 层占位用例以 #skip 入库并在此表单列。
+计数口径：109 条声明 − 0 条 #skip = 109 执行（2026-11-26 CLI 宿主接线后，wasm 与 native 双目标各 109/109）；`--include-skipped` 结果单独报告。历史基线依次为 M3/W5 后 99、M2 后 94、M1 后 86、M0 后 76、M0 前 68。W6-A 的 SKIPPED/PASS 属脚本层独立口径，不产生 `moon test` 用例。
 
 ### 6.5 验收 ID 双向追溯表
 
@@ -215,7 +215,7 @@ R runner：样本路径+登记哈希 → 哈希不符拒绝执行 → 规范化�
 ## 8. L5 元契约门禁
 
 1. 快照门禁：`moon info` + `git diff --exit-code -- pkg.generated.mbti cmd/main/pkg.generated.mbti`（纯加法；已在 CI，维持）。
-2. 双目标等价：`moon test`（默认 wasm）与 `moon test --target native` 同计数全绿（基线 68/68×2）；纯函数层同 fixture 值输出逐字节 diff=0（W4 起对 generate_multi/新函数同样执行）。
+2. 双目标等价：`moon test`（默认 wasm）与 `moon test --target native` 同计数全绿（当前 109/109×2；开发前历史基线 68/68×2）；纯函数层同 fixture 值输出逐字节 diff=0（W4 起对 generate_multi/新函数同样执行）。
 3. 错误簿记门禁：§6.2 与测试代码双向核对（每变体 ≥1 显式变体名断言），缺一即红；W2 合入后启用 11/11 硬门禁。
 4. 变异自检：注入 3 类缺陷——①跳过 check_no_space 校验 ②merge 放行多 END ③篡改 `ok` 恒等式（ok=true 硬编码）——套件必须变红后还原复绿；每包合入前跑一次。
 5. 计数纪律：#skip/SKIPPED/78 不计通过；测试过滤串以 `*` 结尾防空转假绿；计数一律实跑重测（B25/B26 先例）。
@@ -243,9 +243,9 @@ moon build --target native  # CLI E2E 前置
 
 落地验收（逐层勾选）：
 
-- [x] L0：99 条全绿（M3/W5 后，原 94/86/76/68 基线经 W3→W4→W5 递进零改动）；簿记 11/11 已达成（W2）；W5 新函数（NdkHost/host_tag/generate_with_host/api_level_advisory）已附样例。
-- [◐] L1：P1-P8 变形律自动化；截断扫描（W3 新解析路径已一行接入：render 空白 token/merge 多 END/键名变体；W4 parse_gen_args_ext 参数序列；W5 api_level_advisory ndk_version）；≥1000 变异体/轮仍待后续
-- [ ] L2：render golden 维持；probe 记录行/merge 三态 golden 扩充（后续）
-- [x] L3/R：W6-A 脚本层落地 `tools/oracle-run.ps1`；无 NDK→SKIPPED 78、哈希不符→拒绝 1、SKIPPED `counted_as_pass=false`（T-W6-1..3 实跑；真实 NDK 下 E3 成功路径待有 NDK 机器复验，本机无 NDK 按设计 SKIPPED）
-- [◐] L4：W4 已实跑全部 17+4 场景并登记；仓库内脚本固化仍待（脚本层 W6 已建 oracle runner，CLI 场景脚本化属可选 job）
-- [◐] L5：快照门禁已在 CI；簿记/变异自检/引用扫描/双目标等价随 W1/W2 落地（引用实存性扫描待脚本化）
+- [x] L0：当前 109 条全绿（CLI 宿主接线后；历史 99/94/86/76/68 基线经 W3→W4→W5→宿主接线递进零改动）；簿记 11/11 已达成（W2）；W5 与 CLI 宿主接线新函数均已附样例。
+- [◐] L1：P1–P4/P7/P8 已有点状自动化；P5 排列穷举与 P6 双通道自动差分待建；截断扫描已落地（W3 新解析路径一行接入：render 空白 token/merge 多 END/键名变体；W4 `parse_gen_args_ext` 参数序列；W5 `api_level_advisory` ndk_version；CLI 宿主接线 `parse_gen_args_with_host`）；≥1000 变异体/轮仍待后续。
+- [ ] L2：render golden 维持；probe 记录行/merge 三态 golden 扩充（后续）。
+- [x] L3/R：W6-A 脚本层 `tools/oracle-run.ps1` 已验收；无 NDK→SKIPPED 78、哈希不符→拒绝 1、SKIPPED `counted_as_pass=false`；真实 NDK 成功路径已验收 PASS（2026-11-26，WSL/Linux + NDK r27c + API 28/arm64，`status=PASS`/`exit_code=0`/`counted_as_pass=true`，见 [oracle-reports/README.md](../tools/oracle-reports/README.md) §已登记的真实 PASS）。
+- [◐] L4：17 场景手工基线 + W4 四新增场景已实跑；仓库内 CLI 场景脚本固化仍待（现有 W6-A 脚本仅覆盖 oracle runner）。
+- [◐] L5：快照门禁与错误簿记 11/11 已门禁化，双目标 109/109 已实跑；变异自检仍属人工缺陷注入纪律，引用实存性扫描待脚本化。

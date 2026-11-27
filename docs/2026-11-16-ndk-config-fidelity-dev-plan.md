@@ -53,10 +53,10 @@
 | B23 | 缺口（版本纵深）：无 API 上限/NDK 版本×API 矩阵校验；level=100000 可通过 generate（parse 层仅 cap 100000）；无「level 高于该 NDK 已知最高 API」告警 | moon_abi.mbt `check_api_level`；gen_cli.mbt `parse_api_level_value` |
 | B24 | 实测基线：五门禁全绿（见文档头）；M3/W5 后 wasm 与 native 双目标各 99/99（2026-11-26）；#skip=0；工作树干净 | 2026-11-26 本机实跑 |
 | B25 | 计数重测：测试声明 68 条 = gen_cli_test 16 + moon_abi_test 21 + wbtest 9 + ndk_probe_test 7 + ndk_probe_fs_test 3 + gen_cli_fs_test 3 + r4_edge_test 9；与 README「68/68」口径一致 | 逐文件 Select-String 重数 + moon test 实跑 |
-| B26 | 漂移（计数）：`git rev-list --count HEAD` = **16**，历史申报口径「15 条有效提交」滞后 +1 | 2026-11-16 git 实测 |
+| B26 | 漂移（计数）：提交数易随新提交增长，统一以 `git rev-list --count HEAD` 实测；历史申报口径仅作线索，不回写 | 复验时执行 `git rev-list --count HEAD` |
 | B27 | 漂移（API 索引）：README §3 索引缺 4 条 pub 声明：`pub async fn probe_ndk`、`pub async fn sync_config_file`、`pub fn MoonAbiError::to_repr`、`pub trait ConfigRenderer`（索引只抽 `pub fn` 行，漏 async/方法/trait） | README.md L32-65 ↔ pkg.generated.mbti 逐条核对 |
 | B28 | 漂移（计数）：历史申报「8 个值类型」为 R1 口径；实测 pub(all) 类型 **16**（9 struct + 7 enum）；MoonAbiError 11 变体口径不变 | pkg.generated.mbti L63-176 逐个数 |
-| B29 | 漂移（失效引用）：ci.yml Gate5 失败消息引用 `docs/API.md`；该文件已在 HEAD 提交 93c6364 删除（docs/API.md、DECISIONS.md、DESIGN.md、R4-REPORT.md 四份合并入 README.md，docs/ 目录现已不存在） | .github/workflows/ci.yml L122；git show 93c6364 --stat |
+| B29 | 漂移（失效引用）：ci.yml Gate5 失败消息曾引用 `docs/API.md`；该旧文件已在 HEAD 提交 93c6364 删除（docs/API.md、DECISIONS.md、DESIGN.md、R4-REPORT.md 四份合并入 README.md）。后续重新建立的 docs/ 仅存放开发/测试文档，不再恢复旧 API 文档 | .github/workflows/ci.yml L122；git show 93c6364 --stat；当前目录实测 |
 | B30 | 漂移（失效引用）：ci.yml 注释引用 `pkg.generated.mbti.r1`（R1 基线存档）；该文件已在提交 d4b18a8 删除 | .github/workflows/ci.yml L16；git show d4b18a8 |
 | B31 | 漂移（兄弟口径误植）：ci.yml L29 与 copilot-setup-steps.yml L7 以 `bobzhang/zip@0.1.2` 为「本仓库钉死依赖」示例；本模块 moon.mod 零第三方依赖，示例系他模块口径误植 | .github/workflows/*.yml ↔ moon.mod |
 | B32 | 漂移（自包含）：moon_abi.mbt L95 注释引用外部仓库符号 `ToolchainVersions`（「精确版本锁由 … 持有」），假定可访问本仓库之外的代码 | moon_abi.mbt L94-95 |
@@ -66,15 +66,15 @@
 | B36 | fixture 形态：无 tests/fixtures 目录；全部测试为程序化构造 + 内嵌 golden 字符串；无死资产、无登记文件缺失问题 | 目录实测 + 测试文件通读 |
 | B37 | 观察（非缺陷）：probe 实跑（本机无 NDK）found=false 退出 1、6 候选；join_path 对含 `/` 的 child 产生混合分隔符（如 `C:\…\Android/Sdk\ndk`），Windows 接受、风格推断不受影响 | ndk_probe.mbt `join_path`；本机 probe --json 实跑 |
 | B38 | 版本一致性：CLI tool_version "0.1.0" 与 moon.mod version 一致；--version 输出 "moon-abi 0.1.0" | cmd/main/main.mbt L19；moon.mod L14；实跑 |
-| B39 | **已修复（CLI 宿主接线，2026-11-26）**：W5 宿主能力接入 CLI（`--host windows|linux|darwin`；未指定时显式 `--path-style` 维持旧的 windows/linux 映射，`auto` 下 macOS + unix 风格根修正为 darwin）；旧 Windows/Linux 参数组合输出逐字节不变；wasm/native 各 109/109，快照 +4 声明 +1 struct | gen_cli_ext.mbt `parse_gen_args_with_host`/`generate_multi_with_host`/`resolve_default_host`；cmd/main main.mbt `current_platform_host`；CHANGELOG |
-| B40 | **E3 真实 PASS（2026-11-26）**：WSL Ubuntu 24.04.4 + NDK r27c `27.2.12479018` + moon 0.1.20261126，API 28/arm64，`moon build --target native` 退出码 0，`counted_as_pass=true`；报告 `oracle-20261126-210303.json`（gitignore）。runner 新增 `-CrossCc/-CrossAr`（仅临时构建注入 `MOON_CC/MOON_AR`）与 `host_os/cross_cc/cross_ar` 字段。Windows 宿主 FAIL 取证：NDK 无 `<triple>-ar`、package cc 不改变共享 runtime 目标、全局 `MOON_CC` 受 core `platform` cfg 限制 | tools/oracle-run.ps1；oracle-reports/README；CHANGELOG |
+| B39 | **已修复（CLI 宿主接线，2026-11-26）**：W5 宿主能力接入 CLI（`--host windows|linux|darwin`；未指定时显式 `--path-style` 维持旧的 windows/linux 映射，`auto` 下 macOS + unix 风格根修正为 darwin）；旧 Windows/Linux 参数组合输出逐字节不变；wasm/native 各 109/109，快照 +5 声明（4 fn + 1 struct） | gen_cli_ext.mbt `parse_gen_args_with_host`/`generate_multi_with_host`/`resolve_default_host`；cmd/main main.mbt `current_platform_host`；CHANGELOG |
+| B40 | **E3 真实 PASS（2026-11-26）**：WSL Ubuntu 24.04.4 + NDK r27c `27.2.12479018` + moon 0.1.20261126，API 28/arm64，`moon build --target native` 退出码 0，`counted_as_pass=true`；报告 `oracle-20261126-210303.json`（gitignore 运行产物，不随仓库分发）。runner 新增 `-CrossCc/-CrossAr`（仅临时构建注入 `MOON_CC/MOON_AR`）与 `host_os/cross_cc/cross_ar` 字段。Windows 宿主 FAIL 取证：NDK 无 `<triple>-ar`、package cc 不改变共享 runtime 目标、全局 `MOON_CC` 受 core `platform` cfg 限制 | tools/oracle-run.ps1；[oracle-reports/README.md](../tools/oracle-reports/README.md)；CHANGELOG |
 
 **对历史口径的修正**：
 
-1. 提交数 15 → **16**（B26，git 实测）。
+1. 提交数：不固定易漂移数字，统一以 `git rev-list --count HEAD` 实测为准（B26；不回写历史申报材料）。
 2. 值类型数 8 → **16**（B28，R1 口径滞后于 R4 加法）。
 3. README API 索引并非完整 pub 面：漏 2 条 async fn、1 条方法、1 条 trait（B27）。
-4. 「docs/DECISIONS.md 可查」失效：docs/ 四份文档已在 HEAD 合并入 README 并删除（B29/B33）；ci.yml 仍引用 docs/API.md 与 .r1 存档（B29/B30）。
+4. 「docs/DECISIONS.md 可查」失效：旧四份文档已在 HEAD 合并入 README 并删除（B29/B33）；ci.yml 仍引用 docs/API.md 与 .r1 存档（B29/B30）。
 5. 错误变体显式簿记并非满覆盖：9/11，CliUsage 仅间接覆盖、NdkNotFound 为死变体（B9/B10）。
 6. 「68/68 通过」口径本次复验成立（B24/B25），但 README 标注日期为 2026-11-11，本文以 2026-11-16 实跑为准。
 
@@ -149,7 +149,7 @@
 **实现要点**：
 - ci.yml L122：`docs/API.md` → 改为「README.md §3 API 索引」；L16：`.r1` 句改为历史说明（「R1 基线存档已于发布前清理删除，不在 diff 范围」）；L29 与 copilot-setup-steps.yml L7：删除 bobzhang/zip 示例，改为「本模块零第三方依赖；如未来引入，按 moon.mod 钉死版本声明由 check/build 自动同步」。
 - moon_abi.mbt L94-95 注释：删除外部仓库符号引用，改为自足表述（「21 为 r22+ 全系 NDK 的保守安全下限；精确版本策略由调用方 profile 持有」）。
-- README §3 索引补齐 4 条（probe_ndk/sync_config_file/to_repr/ConfigRenderer），抽取口径改为「全部 pub 声明（含 async/方法/trait）」；§4 依赖口径补 debug/env/test 注记；L4「唯一说明文档」→「唯一入口文档；带日期的开发/测试文档见 docs/」；§6 补 B21 记录行局限声明与提交数 16 口径。
+- README §3 索引补齐 4 条（probe_ndk/sync_config_file/to_repr/ConfigRenderer），抽取口径改为「全部 pub 声明（含 async/方法/trait）」；§4 依赖口径补 debug/env/test 注记；L4「唯一说明文档」→「唯一入口文档；带日期的开发/测试文档见 docs/」；§6 补 B21 记录行局限声明与 `git rev-list --count HEAD` 提交数口径。
 - 新建 docs/CHANGELOG.md，登记 W1（日期/工作包/新增 pub 声明=无/快照 diff=空/测试增量=0）。
 - 本文与配套测试文档即 W1 交付物的一部分；历史申报口径修正以本文 §0 为准（申报文档在仓库外，不回写）。
 **验收**：T-W1-1（引用实存性扫描零失效）、T-W1-2（README 索引 ↔ mbti 逐条一致）、T-W1-3（五门禁绿 + 快照 diff 空）、T-W1-4（CHANGELOG 建立并登记）。
@@ -239,10 +239,10 @@ pub fn api_level_advisory(NdkProfile) -> Array[String]
 - **A（采纳）**：建 tools/oracle-run.ps1（仓库自包含）：输入=仓库外 NDK 根路径 + SHA-256 登记文件；哈希不符拒绝执行；在系统临时目录构造最小 MoonBit 项目（确定性自产源码），粘贴 generate+render 产物为 moon.pkg，跑 `moon build --target native`；成功/失败均输出结构化差分报告（NDK 哈希+日期+工具链版本+退出码）；NDK 缺失→显式 SKIPPED（退出码 78 口径），永不计入通过。
 - B（降级，未采纳，存档备选）：仅做 `moon check` 级语法 oracle（不触发 C 编译，验证 DSL 可解析），真实构建差分维持「E3 未决」登记。
 - C（零成本，未采纳）：不建 runner；README 维持 E3 未决声明，测试文档 L3/R 层全部标「未实现」。
-**实现要点（A）**：脚本不引用仓库外目录（样本路径由参数注入）；临时项目用后即焚；报告落 tools/oracle-reports/（.gitignore 排除产物，仅保留报告模板）；入库 #skip 占位用例保留不删。
+**实现要点（A）**：脚本不引用仓库外目录（样本路径由参数注入）；临时项目用后即焚；报告落 tools/oracle-reports/（.gitignore 排除产物，仅保留报告模板）；当前零入库 `#skip` 占位用例，脚本层 SKIPPED/PASS 不混入 `moon test` 计数。
 **验收**：T-W6-1（有 NDK→差分报告；无 NDK→显式 SKIPPED）、T-W6-2（哈希不符拒绝执行）、T-W6-3（SKIPPED 不进通过计数）。
 
-**验收（实测结果）**：T-W6-1 ✓（无 NDK→SKIPPED 退出码 78 + 结构化报告；假 NDK + 通过哈希门→gen 成功并执行 `moon build --target native`，因假 cc 不存在 FAIL 退出码 1，报告含 NDK 哈希/版本/工具链/退出码）；T-W6-2 ✓（错误哈希→FAIL 退出码 1，`SHA-256 mismatch ... refuse to execute`，不进入构建）；T-W6-3 ✓（SKIPPED 报告 `counted_as_pass=false`，退出码 78，脚本不参与 `moon test` 通过计数）。无新增 pub 声明、快照 diff 空。真实 NDK 下的 E3 成功路径需在装有 NDK 的机器复验（本机无 NDK，按设计 SKIPPED）。
+**验收（实测结果）**：T-W6-1 ✓（无 NDK→SKIPPED 退出码 78 + 结构化报告；假 NDK + 通过哈希门→gen 成功并执行 `moon build --target native`，因假 cc 不存在 FAIL 退出码 1）；T-W6-2 ✓（错误哈希→FAIL 退出码 1，`SHA-256 mismatch ... refuse to execute`，不进入构建）；T-W6-3 ✓（SKIPPED 报告 `counted_as_pass=false`，退出码 78，脚本不参与 `moon test` 通过计数）；T-W6-4 ✓（真实 NDK 成功路径已验收：2026-11-26 在 WSL/Linux + NDK r27c `27.2.12479018` + moon 0.1.20261126、API 28/arm64 下取得 `status=PASS`/`exit_code=0`/`counted_as_pass=true`，证据见 [oracle-reports/README.md](../tools/oracle-reports/README.md) §已登记的真实 PASS）。无新增 pub 声明、快照 diff 空；Windows 宿主受跨编译限制保留 FAIL 取证，不冒充 PASS。
 
 ## 6. 里程碑与合入顺序
 

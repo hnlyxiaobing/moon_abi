@@ -17,15 +17,14 @@
 pwsh tools/oracle-run.ps1
 
 # 有 NDK：真实构建差分（退出码 0 通过 / 1 失败）
-pwsh tools/oracle-run.ps1 -NdkRoot C:\android-ndk\27.0.12077973
+pwsh tools/oracle-run.ps1 -NdkRoot <NDK根>
 
 # 可选：先用 source.properties 的 SHA-256 锁版本（不符拒绝执行，T-W6-2）
-pwsh tools/oracle-run.ps1 -NdkRoot /opt/android-ndk -HashFile tools/oracle-reports/ndk-hash.txt
+pwsh tools/oracle-run.ps1 -NdkRoot <NDK根> -HashFile tools/oracle-reports/ndk-hash.txt
 
 # 非 Android 宿主：交叉编译只在临时项目构建阶段注入（MoonBit 要求全局 MOON_CC/MOON_AR）
-pwsh tools/oracle-run.ps1 -NdkRoot ~/android-ndk/android-ndk-r27c -ApiLevel 28 `
-  -CrossCc ~/android-ndk/android-ndk-r27c/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android28-clang `
-  -CrossAr ~/android-ndk/android-ndk-r27c/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+pwsh tools/oracle-run.ps1 -NdkRoot <NDK根> -ApiLevel 28 `
+  -CrossCc <交叉CC> -CrossAr <交叉AR>
 ```
 
 `-HashFile` 首个非空且非 `#` 行 = `<NdkRoot>/source.properties` 的 SHA-256。

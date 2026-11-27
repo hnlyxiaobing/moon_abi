@@ -1,7 +1,7 @@
 # moon_abi · NDK 交叉编译配置生成
 
 > 独立发布单元 ｜ L4 工程交付 ｜ `preferred_target = wasm` ｜ Apache-2.0
-> 状态：`moon test` **109/109** 通过（2026-11-26 本机实测，wasm 与 native 双目标）；本文件是本仓库的**入口**文档，带日期的开发/测试文档与变更簿记见 [docs/](docs/)。
+> 状态：`moon test` **109/109** 通过（2026-11-27 本机实测，wasm 与 native 双目标）；本文件是本仓库的**入口**文档，带日期的开发/测试文档与变更簿记见 [docs/](docs/)。
 > 公开 API 以 `pkg.generated.mbti` 为准（由 `moon info` 生成，禁手工编辑）；加法性变更须登记簿记 + 快照审阅 + 快照门禁。
 
 ## 1. 定位与边界
@@ -101,5 +101,5 @@ pub trait ConfigRenderer {
 - E3/W6-A 模块侧已在真实 NDK 上取得 PASS（2026-11-26：WSL Ubuntu 24.04.4、NDK r27c `27.2.12479018`、moon 0.1.20261126、API 28 / arm64；`counted_as_pass=true`，报告 `tools/oracle-reports/oracle-20261126-210303.json`，`source.properties` SHA-256 `70f1c516…83cf6`）。限制：MoonBit 的 package-level `link.native.cc` 不能改变共享 runtime 目标，非 Android 宿主需 `MOON_CC` + `MOON_AR`（runner 新增 `-CrossCc/-CrossAr`，仅注入临时项目构建）；API 21 会在 runtime `getentropy` 处失败，故本轮用 API 28；Windows 宿主受 core `platform` cfg 固定为 Windows 影响，当前工具链无法完成 Windows→Android 差分。产出可加载 `.so` 的 CMake/组合根集成仍不在本仓库范围。
 - 「NDK r23 移除 standalone toolchain」是误述，实际移除的是 GNU binutils 与 GDB。
 - 已知局限：probe 文本记录行（`NDK|…`/`CAND|…`/`WARN|…`）在路径含 `|` 或换行时解析歧义；JSON 通道无此问题。记录行格式冻结，如需转义走未来新函数。
-- 提交数口径：以 `git rev-list --count HEAD` 实测为准（2026-11-16 基线 16，历史申报口径 15 滞后）。
+- 提交数口径：以 `git rev-list --count HEAD` 实测为准，不固定易漂移数字。
 

@@ -35,7 +35,7 @@
 > 路径风格推断的旧行为，仅修正 macOS 上 unix 风格 NDK 根被误判为 linux 的缺口。
 > 旧参数组合（单/多 ABI、`--out`、`--path-style`、extra）输出逐字节不变（Windows/Linux）。
 
-- 新增 pub 声明：`host_from_name(String) -> NdkHost`、`GenCommandWithHost`（struct：`command` / `host`）、`parse_gen_args_with_host(ArrayView[String]) -> GenCommandWithHost`、`generate_multi_with_host(NdkProfile, Array[Abi], NdkHost) -> Array[LinkNativeConfig]`、`resolve_default_host(Bool, NdkHost) -> NdkHost`。快照 diff：纯加法 +4 声明 +1 struct。
+- 新增 pub 声明：`host_from_name(String) -> NdkHost`、`GenCommandWithHost`（struct：`command` / `host`）、`parse_gen_args_with_host(ArrayView[String]) -> GenCommandWithHost`、`generate_multi_with_host(NdkProfile, Array[Abi], NdkHost) -> Array[LinkNativeConfig]`、`resolve_default_host(Bool, NdkHost) -> NdkHost`。快照 diff：纯加法 +5 声明（4 fn + 1 struct）。
 - 行为/契约：
   - `--host windows|linux|darwin`（别名 `win` / `macos` / `mac` / `osx` / `*-x86_64`，大小写与首尾空白归一）；缺值、空值、非法值、重复 → `CliUsage`（退出码 2）。
   - `--host` 与显式 `--path-style windows|unix` 互斥 → `CliUsage`（退出码 2），`auto` 可与 `--host` 共存。
@@ -66,7 +66,7 @@
   - 假 NDK + 错误哈希 → FAIL 1（`SHA-256 mismatch ... refuse to execute`）。
   - 假 NDK + 正确哈希 → gen 成功、`moon build --target native` 因假 cc 不存在而 FAIL 1（证明构建路径真实执行；真 NDK 下将找到 cc 并构建）。
 - 验收：T-W6-1 ✓（无 NDK→SKIPPED；假 NDK→构建尝试与报告）、T-W6-2 ✓（哈希不符拒绝）、T-W6-3 ✓（SKIPPED 报告 `counted_as_pass=false`、退出码 78、不进 `moon test` 计数）。
-- 说明：E3（真实 NDK 下构建成功）需在装有 NDK 的机器上以 `pwsh tools/oracle-run.ps1 -NdkRoot <真实路径>` 复验；本机无 NDK，按设计走 SKIPPED。
+- 历史说明（M4 初验时）：E3（真实 NDK 下构建成功）当时仍需在装有 NDK 的机器上以 `pwsh tools/oracle-run.ps1 -NdkRoot <真实路径>` 复验，初验本机无 NDK，按设计走 SKIPPED；随后已于 2026-11-26 取得真实 PASS，见本文件首条 E3/W6-A 记录。
 
 ## 2026-11-26 · M3（W5 宿主平台与 API 矩阵纵深）
 
